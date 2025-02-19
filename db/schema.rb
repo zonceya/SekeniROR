@@ -41,8 +41,7 @@ ActiveRecord::Schema[8.0].define(version: 0) do
     t.string "profile_picture", limit: 255
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
-
-    t.unique_constraint ["email"], name: "users_email_key"
+    t.index ["email"], name: "users_email_unique", unique: true, where: "(email IS NOT NULL)"
     t.unique_constraint ["username"], name: "users_username_key"
   end
 
