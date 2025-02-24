@@ -3,7 +3,19 @@
 one:
   name: MyString
   email: MyString
+  mobile: MyString
+  username: MyString
+  auth_mode: MyString
+  status: false
+  deleted: false
+  profile_picture: MyString
 
 two:
   name: MyString
   email: MyString
+  mobile: MyString
+  username: MyString
+  auth_mode: MyString
+  status: false
+  deleted: false
+  profile_picture: MyString

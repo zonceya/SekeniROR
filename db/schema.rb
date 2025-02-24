@@ -10,16 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 0) do
+ActiveRecord::Schema[8.0].define(version: 2025_02_18_204922) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
-  create_table "profile", id: :serial, force: :cascade do |t|
-    t.integer "user_id"
-    t.string "profile_picture", limit: 255
-    t.string "mobile", limit: 255
-    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
-    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  create_table "profiles", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "profile_picture"
+    t.string "mobile"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_profiles_on_user_id"
   end
 
   create_table "user_sessions", id: :serial, force: :cascade do |t|
@@ -41,10 +42,10 @@ ActiveRecord::Schema[8.0].define(version: 0) do
     t.string "profile_picture", limit: 255
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
-    t.index ["email"], name: "users_email_unique", unique: true, where: "(email IS NOT NULL)"
+
     t.unique_constraint ["username"], name: "users_username_key"
   end
 
-  add_foreign_key "profile", "users", name: "profile_user_id_fkey"
+  add_foreign_key "profiles", "users"
   add_foreign_key "user_sessions", "users", name: "user_sessions_user_id_fkey"
 end
