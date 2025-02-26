@@ -64,3 +64,5 @@ group :test do
 end
 
 gem "redis", "~> 5.4"
+
+gem "spring", "~> 4.2"
