@@ -6,6 +6,16 @@ class User < ApplicationRecord
   after_commit :create_shop_for_user, on: :create
   after_create :create_profile_for_user
 
+  # 👉 Soft delete (makes user inactive)
+  def soft_delete
+    update(deleted: true)
+  end
+
+  # 👉 Reactivate user
+  def reactivate
+    update(deleted: false)
+  end
+
   private
 
   def create_shop_for_user
@@ -20,6 +30,6 @@ class User < ApplicationRecord
   end
 
   def create_profile_for_user
-    self.create_profile(profile_picture: 'default.png')  # or whatever source
+    self.create_profile(profile_picture: 'default.png')
   end
 end

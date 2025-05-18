@@ -43,6 +43,9 @@ Rails.application.configure do
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
   config.hosts << /[a-z0-9\-]+\.ngrok\-free\.app/
+  config.force_ssl = false 
+
+  config.active_job.queue_adapter = :async
 
   # Raise an error on page load if there are pending migrations.
   config.active_record.migration_error = :page_load

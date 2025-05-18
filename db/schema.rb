@@ -10,9 +10,26 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_02_18_204922) do
+ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "application_log", id: false, force: :cascade do |t|
+    t.string "request_type", limit: 7, null: false
+    t.string "endpoint_url", limit: 1024
+    t.text "request_header", null: false
+    t.text "request_object", null: false
+    t.text "response_object", null: false
+    t.datetime "date", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.check_constraint "request_type::text = ANY (ARRAY['GET'::character varying::text, 'POST'::character varying::text, 'PUT'::character varying::text, 'PATCH'::character varying::text, 'DELETE'::character varying::text])", name: "application_log_request_type_check"
+  end
+
+  create_table "brands", id: :serial, force: :cascade do |t|
+    t.string "name", limit: 64, null: false
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+
+    t.unique_constraint ["name"], name: "brands_name_key"
+  end
 
   create_table "categories", force: :cascade do |t|
     t.string "name", null: false
@@ -26,6 +43,65 @@ ActiveRecord::Schema[8.0].define(version: 2025_02_18_204922) do
     t.unique_constraint ["slug"], name: "categories_slug_key"
   end
 
+  create_table "configurations", primary_key: "shop_id", id: :bigint, default: nil, force: :cascade do |t|
+    t.float "delivery_price", default: 0.0
+    t.boolean "is_delivery_available", default: true
+    t.boolean "is_order_taken", default: true
+  end
+
+  create_table "favorites", id: :serial, force: :cascade do |t|
+    t.integer "user_id"
+    t.uuid "item_id"
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+
+    t.unique_constraint ["user_id", "item_id"], name: "favorites_user_id_item_id_key"
+  end
+
+  create_table "item_colors", id: { type: :serial, limit: 2 }, force: :cascade do |t|
+    t.string "name", null: false
+
+    t.unique_constraint ["name"], name: "item_colors_name_key"
+  end
+
+  create_table "item_conditions", id: { type: :serial, limit: 2 }, force: :cascade do |t|
+    t.string "name", null: false
+    t.text "description"
+
+    t.unique_constraint ["name"], name: "item_conditions_name_key"
+  end
+
+  create_table "item_groups", force: :cascade do |t|
+    t.string "name", null: false
+    t.text "description"
+  end
+
+  create_table "item_sizes", id: :serial, force: :cascade do |t|
+    t.string "name", limit: 32, null: false
+
+    t.unique_constraint ["name"], name: "item_sizes_name_key"
+  end
+
+  create_table "item_stock", force: :cascade do |t|
+    t.uuid "item_variant_id"
+    t.bigint "location_id"
+    t.integer "condition_id", limit: 2
+    t.integer "quantity"
+    t.jsonb "meta"
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  end
+
+  create_table "item_tags", primary_key: ["item_id", "tag_id"], force: :cascade do |t|
+    t.uuid "item_id", null: false
+    t.integer "tag_id", null: false
+  end
+
+  create_table "item_types", force: :cascade do |t|
+    t.bigint "group_id"
+    t.string "name", null: false
+    t.text "description"
+  end
+
   create_table "item_variants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "item_id"
     t.string "item_type"
@@ -36,6 +112,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_02_18_204922) do
     t.jsonb "meta"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.integer "color_id", limit: 2
   end
 
   create_table "items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -50,6 +127,23 @@ ActiveRecord::Schema[8.0].define(version: 2025_02_18_204922) do
     t.jsonb "meta"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.bigint "item_type_id"
+    t.integer "school_id"
+    t.integer "brand_id"
+    t.integer "size_id"
+    t.string "additional_photo"
+    t.string "label"
+    t.decimal "price"
+    t.integer "quantity"
+    t.bigint "item_condition_id"
+    t.bigint "location_id"
+    t.bigint "province_id"
+  end
+
+  create_table "locations", force: :cascade do |t|
+    t.string "province", null: false
+    t.string "state_or_region"
+    t.string "country", default: "South Africa"
   end
 
   create_table "my_store_purchases", force: :cascade do |t|
@@ -102,6 +196,58 @@ ActiveRecord::Schema[8.0].define(version: 2025_02_18_204922) do
     t.index ["user_id"], name: "index_profiles_on_user_id"
   end
 
+  create_table "promotions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "item_id"
+    t.string "promo_type", limit: 50
+    t.datetime "start_date", precision: nil, null: false
+    t.datetime "end_date", precision: nil, null: false
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.integer "shop_id", null: false
+    t.string "title", limit: 128
+    t.text "description"
+    t.string "photo_url", limit: 512
+    t.boolean "is_active", default: true
+    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  end
+
+  create_table "provinces", id: :serial, force: :cascade do |t|
+    t.string "name", limit: 64, null: false
+
+    t.unique_constraint ["name"], name: "provinces_name_key"
+  end
+
+  create_table "purchase_history", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.integer "user_id"
+    t.uuid "item_id"
+    t.datetime "purchased_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  end
+
+  create_table "rating", primary_key: "shop_id", id: :bigint, default: nil, force: :cascade do |t|
+    t.float "rating", default: 0.0
+    t.integer "user_count", default: 0
+  end
+
+  create_table "return_requests", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "order_item_id"
+    t.text "reason"
+    t.string "status", limit: 50, default: "pending"
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  end
+
+  create_table "schools", id: :serial, force: :cascade do |t|
+    t.string "name", limit: 255, null: false
+    t.integer "location_id"
+    t.string "school_type", limit: 50
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  end
+
+  create_table "seller_archive", primary_key: ["user_id", "shop_id"], force: :cascade do |t|
+    t.integer "user_id", null: false
+    t.bigint "shop_id", null: false
+    t.datetime "deleted_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  end
+
   create_table "shops", id: :bigint, default: nil, force: :cascade do |t|
     t.bigint "user_id"
     t.string "name", null: false
@@ -112,6 +258,32 @@ ActiveRecord::Schema[8.0].define(version: 2025_02_18_204922) do
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
   end
 
+  create_table "tags", id: :serial, force: :cascade do |t|
+    t.string "name", null: false
+    t.string "tag_type"
+    t.datetime "created_at", precision: nil
+    t.datetime "updated_at", precision: nil
+  end
+
+  create_table "transactions", primary_key: "transaction_id", id: { type: :string, limit: 64 }, force: :cascade do |t|
+    t.uuid "order_id", null: false
+    t.string "bank_transaction_id", limit: 64, null: false
+    t.string "currency", limit: 3
+    t.string "response_code", limit: 10, null: false
+    t.string "response_message", limit: 500, null: false
+    t.string "gateway_name", limit: 15
+    t.string "bank_name", limit: 500
+    t.string "payment_mode", limit: 15
+    t.string "checksum_hash", limit: 108
+    t.datetime "date", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  end
+
+  create_table "user_schools", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.integer "user_id"
+    t.integer "school_id"
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+  end
+
   create_table "user_sessions", id: :serial, force: :cascade do |t|
     t.integer "user_id"
     t.string "token", limit: 255, null: false
@@ -120,27 +292,57 @@ ActiveRecord::Schema[8.0].define(version: 2025_02_18_204922) do
     t.datetime "ended_at", precision: nil
   end
 
-  create_table "users", id: :serial, force: :cascade do |t|
-    t.string "name", limit: 255, null: false
-    t.string "email", limit: 255, null: false
+  create_table "users", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "email", null: false
+    t.datetime "created_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.datetime "updated_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
     t.string "mobile", limit: 15
     t.string "username", limit: 255
-    t.string "auth_mode", limit: 50, null: false
+    t.string "auth_mode", limit: 50, default: "default_auth_mode", null: false
     t.boolean "status", default: true
     t.boolean "deleted", default: false
     t.string "profile_picture", limit: 255
-    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
-    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
 
     t.unique_constraint ["username"], name: "users_username_key"
   end
 
   add_foreign_key "categories", "categories", column: "parent_id", name: "categories_parent_id_fkey", on_delete: :nullify
+  add_foreign_key "configurations", "shops", name: "configurations_shop_id_fk"
+  add_foreign_key "favorites", "items", name: "favorites_item_id_fkey", on_delete: :cascade
+  add_foreign_key "favorites", "users", name: "favorites_user_id_fkey", on_delete: :cascade
+  add_foreign_key "item_stock", "item_conditions", column: "condition_id", name: "item_stock_condition_id_fkey"
+  add_foreign_key "item_stock", "item_variants", name: "item_stock_item_variant_id_fkey"
+  add_foreign_key "item_stock", "locations", name: "item_stock_location_id_fkey"
+  add_foreign_key "item_tags", "items", name: "item_tags_item_id_fkey", on_delete: :cascade
+  add_foreign_key "item_tags", "tags", name: "item_tags_tag_id_fkey", on_delete: :cascade
+  add_foreign_key "item_types", "item_groups", column: "group_id", name: "item_types_group_id_fkey", on_delete: :nullify
+  add_foreign_key "item_variants", "item_colors", column: "color_id", name: "item_variants_color_id_fkey"
   add_foreign_key "item_variants", "items", name: "item_variants_item_id_fkey"
+  add_foreign_key "items", "brands", name: "items_brand_id_fkey"
+  add_foreign_key "items", "item_conditions", name: "items_item_condition_id_fkey", on_delete: :nullify
+  add_foreign_key "items", "item_sizes", column: "size_id", name: "items_size_id_fkey"
+  add_foreign_key "items", "item_types", name: "items_item_type_id_fkey", on_delete: :nullify
+  add_foreign_key "items", "locations", name: "items_location_id_fkey", on_delete: :nullify
+  add_foreign_key "items", "provinces", name: "items_province_id_fkey", on_delete: :nullify
+  add_foreign_key "items", "schools", name: "items_school_id_fkey"
   add_foreign_key "order_items", "item_variants", name: "order_items_item_variant_id_fkey"
   add_foreign_key "order_items", "items", name: "order_items_item_id_fkey"
   add_foreign_key "order_items", "orders", name: "order_items_order_id_fkey"
   add_foreign_key "profiles", "users"
+  add_foreign_key "profiles", "users", name: "profiles_users_fk"
+  add_foreign_key "promotions", "items", name: "promotions_item_id_fkey", on_delete: :cascade
+  add_foreign_key "promotions", "shops", name: "promotions_shop_id_fkey", on_delete: :cascade
+  add_foreign_key "purchase_history", "items", name: "purchase_history_item_id_fkey", on_delete: :cascade
+  add_foreign_key "purchase_history", "users", name: "purchase_history_user_id_fkey", on_delete: :cascade
+  add_foreign_key "rating", "shops", name: "rating_shop_id_fk"
+  add_foreign_key "return_requests", "order_items", name: "return_requests_order_item_id_fkey", on_delete: :cascade
+  add_foreign_key "schools", "locations", name: "schools_location_id_fkey"
+  add_foreign_key "seller_archive", "shops", name: "seller_archive_shop_id_fk"
+  add_foreign_key "seller_archive", "users", name: "seller_archive_user_id_fk"
   add_foreign_key "shops", "users", name: "shops_user_id_fkey"
+  add_foreign_key "transactions", "orders", name: "transactions_order_id_fk", on_delete: :cascade
+  add_foreign_key "user_schools", "schools", name: "user_schools_school_id_fkey", on_delete: :cascade
+  add_foreign_key "user_schools", "users", name: "user_schools_user_id_fkey", on_delete: :cascade
   add_foreign_key "user_sessions", "users", name: "user_sessions_user_id_fkey"
 end
