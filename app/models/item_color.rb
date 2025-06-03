@@ -1,0 +1,2 @@
+class ItemColor < ApplicationRecord
+end
