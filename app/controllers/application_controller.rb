@@ -3,7 +3,7 @@ class ApplicationController < ActionController::Base
   allow_browser versions: :modern
 
   after_action :log_request
-
+  protect_from_forgery with: :exception
   private
 
   def log_request

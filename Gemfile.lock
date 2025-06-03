@@ -76,6 +76,7 @@ GEM
       public_suffix (>= 2.0.2, < 7.0)
     ast (2.4.2)
     base64 (0.2.0)
+    bcrypt (3.1.20)
     bcrypt_pbkdf (1.1.1)
     bcrypt_pbkdf (1.1.1-x64-mingw-ucrt)
     benchmark (0.4.0)
@@ -128,6 +129,8 @@ GEM
       actionview (>= 5.0.0)
       activesupport (>= 5.0.0)
     json (2.10.1)
+    jwt (2.10.1)
+      base64
     kamal (2.5.2)
       activesupport (>= 7.0)
       base64 (~> 0.2)
@@ -356,12 +359,14 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
+  bcrypt (~> 3.1.7)
   bootsnap
   brakeman
   capybara
   debug
   importmap-rails
   jbuilder
+  jwt
   kamal
   pg (~> 1.1)
   propshaft

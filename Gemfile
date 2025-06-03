@@ -65,3 +65,6 @@ group :test do
 end
 
 gem "redis", "~> 5.4"
+gem 'bcrypt', '~> 3.1.7'
+# Gemfile
+gem 'jwt'
