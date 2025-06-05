@@ -1,51 +1,95 @@
 class Order < ApplicationRecord
-  # Status Enums
-  enum :order_status, { 
-    pending: 0, 
-    paid: 1, 
-    processing: 2, 
-    dispatched: 3, 
-    shipped: 4, 
-    delivered: 5, 
-    completed: 6, 
-    disputed: 7, 
-    cancelled: 8 
-  }, prefix: true, default: :pending
+  # Status Enums (Rails 8 syntax)
+  enum :order_status, {
+    pending: 0,
+    paid: 1,
+    processing: 2,
+    dispatched: 3,
+    shipped: 4,
+    delivered: 5,
+    completed: 6,
+    disputed: 7,
+    cancelled: 8
+  }, prefix: :order, default: :pending
 
-  enum :payment_status, { 
-    unpaid: 0, 
-    paid: 1, 
-    refunded: 2 
-  }, prefix: true, default: :unpaid
+  enum :payment_status, {
+    unpaid: 0,
+    paid: 1,
+    refunded: 2
+  }, prefix: :payment, default: :unpaid
 
   # Associations
   belongs_to :buyer, class_name: 'User'
   belongs_to :shop
   has_many :order_items, dependent: :destroy, inverse_of: :order
   accepts_nested_attributes_for :order_items
+
   # Validations
   validates :shop_id, :buyer_id, :price, :total_amount, presence: true
   validates :price, :service_fee, :total_amount, numericality: { greater_than_or_equal_to: 0 }
   validate :addresses_format
 
-  # Scopes
-  scope :active, -> { where(deleted: false) }
-  scope :by_shop, ->(shop_id) { where(shop_id: shop_id) }
-  scope :recent, -> { order(order_place_time: :desc) }
-
-  # Instance Methods
-  def update_addresses(address_params)
-    update(
-      shipping_address: address_params[:shipping_address] || shipping_address,
-      billing_address: address_params[:billing_address] || billing_address
-    )
+  # Public Status Interface
+  def status
+    order_status
   end
 
-  def cancellable?
-    order_status_pending? && payment_status_unpaid?
+  def status=(value)
+    self.order_status = value
+  end
+
+  def status_label
+    order_status
+  end
+
+  # Generate status_? methods
+  Order.order_statuses.each_key do |status|
+    define_method("status_#{status}?") do
+      order_status == status.to_s
+    end
+  end
+
+  # Address Methods
+  def may_update_address?
+    order_pending? || order_paid? || order_processing?
+  end
+
+  def may_cancel?
+    order_pending? && payment_unpaid?
+  end
+
+  def update_addresses(address_params)
+    transaction do
+      update_shipping_address(address_params[:shipping_address]) if address_params[:shipping_address]
+      update_billing_address(address_params[:billing_address]) if address_params[:billing_address]
+      save!
+    end
+    true
+  rescue ActiveRecord::RecordInvalid => e
+    errors.add(:base, e.message)
+    false
+  end
+
+  # Cache
+  def cache_version
+    updated_at.to_i
   end
 
   private
+ 
+
+  def update_shipping_address(address)
+    return if address.blank?
+    self.shipping_address = (shipping_address || {}).merge(address.compact)
+  end
+
+  def update_billing_address(address)
+    if address[:same_as_shipping].to_s == 'true'
+      self.billing_address = { same_as_shipping: true }
+    else
+      self.billing_address = (billing_address || {}).merge(address.except(:same_as_shipping).compact)
+    end
+  end
 
   def addresses_format
     validate_address_format(:shipping_address)
@@ -54,7 +98,6 @@ class Order < ApplicationRecord
 
   def validate_address_format(field)
     return if self[field].nil?
-    
     unless self[field].is_a?(Hash)
       errors.add(field, "must be a JSON object")
     end

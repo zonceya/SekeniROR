@@ -10,17 +10,19 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_04_222841) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
-  create_table "application_log", id: false, force: :cascade do |t|
+  create_table "application_logs", id: false, force: :cascade do |t|
     t.string "request_type", limit: 7, null: false
     t.string "endpoint_url", limit: 1024
     t.text "request_header", null: false
     t.text "request_object", null: false
-    t.text "response_object", null: false
+    t.text "response_object", default: "{}", null: false
     t.datetime "date", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.integer "user_id"
+    t.integer "status"
     t.check_constraint "request_type::text = ANY (ARRAY['GET'::character varying::text, 'POST'::character varying::text, 'PUT'::character varying::text, 'PATCH'::character varying::text, 'DELETE'::character varying::text])", name: "application_log_request_type_check"
   end
 
@@ -55,6 +57,15 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
 
     t.unique_constraint ["user_id", "item_id"], name: "favorites_user_id_item_id_key"
+  end
+
+  create_table "genders", id: :serial, force: :cascade do |t|
+    t.string "name"
+    t.string "category", default: "standard", null: false
+    t.integer "exact_age"
+    t.string "display_name"
+    t.string "gender_group"
+    t.index ["category", "exact_age"], name: "idx_genders_category_age"
   end
 
   create_table "item_colors", id: { type: :serial, limit: 2 }, force: :cascade do |t|
@@ -121,8 +132,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.text "description"
     t.string "icon"
     t.string "cover_photo"
-    t.string "item_type"
-    t.integer "status", limit: 2
+    t.integer "status", limit: 2, default: 1
     t.boolean "deleted", default: false
     t.jsonb "meta"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
@@ -138,12 +148,15 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.bigint "item_condition_id"
     t.bigint "location_id"
     t.bigint "province_id"
+    t.string "label_photo"
+    t.integer "gender_id"
   end
 
   create_table "locations", force: :cascade do |t|
     t.string "province", null: false
     t.string "state_or_region"
     t.string "country", default: "South Africa"
+    t.integer "town_id"
   end
 
   create_table "my_store_purchases", force: :cascade do |t|
@@ -170,11 +183,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.bigint "shop_id"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.integer "quantity", default: 1, null: false
+    t.index ["item_id"], name: "index_order_items_on_item_id"
+    t.index ["order_id"], name: "index_order_items_on_order_id"
   end
 
   create_table "orders", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.bigint "shop_id"
-    t.decimal "price"
+    t.decimal "price", default: "0.0"
     t.integer "order_status", limit: 2
     t.integer "payment_status", limit: 2
     t.datetime "order_place_time", precision: nil
@@ -185,14 +201,21 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.jsonb "shipping_address"
     t.jsonb "billing_address"
+    t.decimal "service_fee", default: "0.0"
+    t.decimal "total_amount", default: "0.0"
+    t.bigint "buyer_id", null: false
+    t.text "cancellation_reason"
+    t.index ["buyer_id"], name: "index_orders_on_buyer_id"
   end
 
   create_table "profiles", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "profile_picture"
-    t.string "mobile"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "province", limit: 100
+    t.string "location", limit: 255
+    t.text "shop_description"
     t.index ["user_id"], name: "index_profiles_on_user_id"
   end
 
@@ -240,6 +263,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.string "school_type", limit: 50
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.integer "province_id"
   end
 
   create_table "seller_archive", primary_key: ["user_id", "shop_id"], force: :cascade do |t|
@@ -263,6 +287,13 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.string "tag_type"
     t.datetime "created_at", precision: nil
     t.datetime "updated_at", precision: nil
+  end
+
+  create_table "towns", id: :serial, force: :cascade do |t|
+    t.string "name", limit: 255, null: false
+    t.integer "province_id"
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
   end
 
   create_table "transactions", primary_key: "transaction_id", id: { type: :string, limit: 64 }, force: :cascade do |t|
@@ -290,6 +321,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.jsonb "meta"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "ended_at", precision: nil
+    t.index ["token"], name: "index_user_sessions_on_token"
   end
 
   create_table "users", force: :cascade do |t|
@@ -303,10 +335,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
     t.boolean "status", default: true
     t.boolean "deleted", default: false
     t.string "profile_picture", limit: 255
+    t.string "role", limit: 50, default: "user"
+    t.string "password_digest", limit: 255
 
+    t.unique_constraint ["email"], name: "unique_email"
     t.unique_constraint ["username"], name: "users_username_key"
   end
 
+  add_foreign_key "application_logs", "users", name: "application_log_user_id_fkey", on_delete: :nullify
   add_foreign_key "categories", "categories", column: "parent_id", name: "categories_parent_id_fkey", on_delete: :nullify
   add_foreign_key "configurations", "shops", name: "configurations_shop_id_fk"
   add_foreign_key "favorites", "items", name: "favorites_item_id_fkey", on_delete: :cascade
@@ -326,9 +362,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
   add_foreign_key "items", "locations", name: "items_location_id_fkey", on_delete: :nullify
   add_foreign_key "items", "provinces", name: "items_province_id_fkey", on_delete: :nullify
   add_foreign_key "items", "schools", name: "items_school_id_fkey"
+  add_foreign_key "locations", "towns", name: "locations_town_id_fkey", on_delete: :nullify
   add_foreign_key "order_items", "item_variants", name: "order_items_item_variant_id_fkey"
   add_foreign_key "order_items", "items", name: "order_items_item_id_fkey"
   add_foreign_key "order_items", "orders", name: "order_items_order_id_fkey"
+  add_foreign_key "orders", "users", column: "buyer_id", name: "fk_buyer"
   add_foreign_key "profiles", "users"
   add_foreign_key "profiles", "users", name: "profiles_users_fk"
   add_foreign_key "promotions", "items", name: "promotions_item_id_fkey", on_delete: :cascade
@@ -338,9 +376,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_06_225134) do
   add_foreign_key "rating", "shops", name: "rating_shop_id_fk"
   add_foreign_key "return_requests", "order_items", name: "return_requests_order_item_id_fkey", on_delete: :cascade
   add_foreign_key "schools", "locations", name: "schools_location_id_fkey"
+  add_foreign_key "schools", "provinces", name: "schools_province_id_fkey", on_delete: :nullify
   add_foreign_key "seller_archive", "shops", name: "seller_archive_shop_id_fk"
   add_foreign_key "seller_archive", "users", name: "seller_archive_user_id_fk"
   add_foreign_key "shops", "users", name: "shops_user_id_fkey"
+  add_foreign_key "towns", "provinces", name: "towns_province_id_fkey", on_delete: :nullify
   add_foreign_key "transactions", "orders", name: "transactions_order_id_fk", on_delete: :cascade
   add_foreign_key "user_schools", "schools", name: "user_schools_school_id_fkey", on_delete: :cascade
   add_foreign_key "user_schools", "users", name: "user_schools_user_id_fkey", on_delete: :cascade

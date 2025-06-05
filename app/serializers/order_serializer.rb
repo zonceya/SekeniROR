@@ -7,7 +7,7 @@ class OrderSerializer
       {
         id: @order.id,
         status: @order.status,
-        payment_status: @order.payment_status,
+       payment_status: @order.payment_status || 'unpaid',
         buyer_id: @order.buyer_id,
         shop_id: @order.shop_id,
         price_breakdown: {
@@ -22,7 +22,7 @@ class OrderSerializer
         },
         timestamps: {
           created_at: @order.created_at,
-          cancelled_at: @order.cancelled_at
+          cancelled_at: @order.try(:cancelled_at) # 
         },
         cancellable: @order.may_cancel?,
         cancellation_reason: @order.cancellation_reason

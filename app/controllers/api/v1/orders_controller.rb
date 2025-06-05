@@ -74,7 +74,9 @@ module Api
           render_forbidden
         end
       end
-
+      def cache_key
+         "api/v1/orders/#{@order.id}-#{@order.cache_version}"
+     end
       def order_params
         params.require(:order).permit(
           :item_id,
