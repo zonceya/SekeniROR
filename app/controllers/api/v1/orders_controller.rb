@@ -27,20 +27,31 @@ module Api
           render json: { errors: result.errors }, status: :unprocessable_entity
         end
       end
-
-      # GET /orders/:id
-      def show
-        render_order(@order)
-      end
-
-      # PATCH /orders/:id/addresses
-      def addresses
-        if @order.may_update_address? && @order.update_addresses(address_params)
-          render_order(@order)
-        else
-          render_error(@order.errors.full_messages.presence || "Address update not allowed")
+      def serialized_order
+        Rails.cache.fetch(cache_key, expires_in: 1.hour) do
+          OrderSerializer.new(@order).as_json
         end
       end
+      # GET /orders/:id
+        def show
+        render json: serialized_order, status: :ok
+        rescue => e
+        Rails.logger.error "Order show failed: #{e.message}"
+        render json: { error: "Failed to process order" }, status: :internal_server_error
+        end
+
+      # PATCH /orders/:id/addresses
+    def addresses
+      if @order.may_update_address?
+        if @order.update_addresses(address_params)
+          render_order(@order)
+        else
+          render_error(@order.errors.full_messages, :unprocessable_entity)
+        end
+      else
+        render_error("Address update not allowed in current order state", :forbidden)
+      end
+    end
 
       # POST /orders/:id/cancel
       def cancel

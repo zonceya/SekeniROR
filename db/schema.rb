@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_04_222841) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_04_212204) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -19,7 +19,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_222841) do
     t.string "endpoint_url", limit: 1024
     t.text "request_header", null: false
     t.text "request_object", null: false
-    t.text "response_object", default: "{}", null: false
+    t.text "response_object"
     t.datetime "date", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.integer "user_id"
     t.integer "status"
