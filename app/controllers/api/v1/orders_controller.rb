@@ -1,15 +1,6 @@
 module Api
   module V1
     class OrdersController < Api::V1::BaseController
-      # Debugging statements (remove in production)
-      puts "[CLASS LOAD] Ancestors: #{ancestors}"
-      puts "[CLASS LOAD] Included modules: #{included_modules}"
-
-      before_action do
-        puts "[REQUEST] Can respond to authenticate_user!?: #{respond_to?(:authenticate_user!)}"
-        puts "[REQUEST] Method source: #{method(:authenticate_user!).source_location}" if respond_to?(:authenticate_user!)
-      end
-
       before_action :authenticate_request!
       before_action :set_order, except: [:create]
       before_action :authorize_order_access, only: [:show, :cancel, :addresses]
@@ -17,41 +8,44 @@ module Api
 
       # POST /orders
       def create
-        Rails.logger.debug "OrderItem class available before creation: #{defined?(OrderItem)}"
-        result = Orders::OrderCreator.call(order_params.merge(buyer_id: current_user.id))
+        Rails.logger.info "Creating order with params: #{order_params}"
+        
+        result = Orders::OrderCreator.call(
+          order_params.merge(buyer_id: current_user.id)
+        )
 
         if result.success?
-          order = result.respond_to?(:value!) ? result.value! : result.order
-          render_order(result.value!, :created)
+          order = result.order || result.value # Handle both Success object formats
+          render_order(order, :created)
         else
+          Rails.logger.error "Order creation failed: #{result.errors}"
           render json: { errors: result.errors }, status: :unprocessable_entity
         end
+      rescue => e
+        Rails.logger.error "Order creation error: #{e.message}\n#{e.backtrace.join("\n")}"
+        render json: { errors: [e.message] }, status: :unprocessable_entity
       end
-      def serialized_order
-        Rails.cache.fetch(cache_key, expires_in: 1.hour) do
-          OrderSerializer.new(@order).as_json
-        end
-      end
+
       # GET /orders/:id
-        def show
+      def show
         render json: serialized_order, status: :ok
-        rescue => e
+      rescue => e
         Rails.logger.error "Order show failed: #{e.message}"
         render json: { error: "Failed to process order" }, status: :internal_server_error
-        end
+      end
 
       # PATCH /orders/:id/addresses
-    def addresses
-      if @order.may_update_address?
-        if @order.update_addresses(address_params)
-          render_order(@order)
+      def addresses
+        if @order.may_update_address?
+          if @order.update_addresses(address_params)
+            render_order(@order)
+          else
+            render_error(@order.errors.full_messages, :unprocessable_entity)
+          end
         else
-          render_error(@order.errors.full_messages, :unprocessable_entity)
+          render_error("Address update not allowed in current order state", :forbidden)
         end
-      else
-        render_error("Address update not allowed in current order state", :forbidden)
       end
-    end
 
       # POST /orders/:id/cancel
       def cancel
@@ -75,7 +69,7 @@ module Api
       end
 
       def set_order
-        @order = Order.find(params[:id])
+        @order = Order.includes(:order_items, :shop).find(params[:id])
       rescue ActiveRecord::RecordNotFound
         render_error('Order not found', :not_found)
       end
@@ -85,9 +79,17 @@ module Api
           render_forbidden
         end
       end
+
       def cache_key
-         "api/v1/orders/#{@order.id}-#{@order.cache_version}"
-     end
+        "api/v1/orders/#{@order.id}-#{@order.updated_at.to_i}"
+      end
+
+      def serialized_order
+        Rails.cache.fetch(cache_key, expires_in: 1.hour) do
+          OrderSerializer.new(@order).as_json
+        end
+      end
+
       def order_params
         params.require(:order).permit(
           :item_id,

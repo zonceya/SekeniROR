@@ -1,5 +1,6 @@
 class Order < ApplicationRecord
-  # Status Enums (Rails 8 syntax)
+  
+   after_update :update_inventory, if: :saved_change_to_order_status?
   enum :order_status, {
     pending: 0,
     paid: 1,
@@ -14,8 +15,9 @@ class Order < ApplicationRecord
 
   enum :payment_status, {
     unpaid: 0,
-    paid: 1,
-    refunded: 2
+    processing: 1,
+    paid: 2,
+    refunded: 3
   }, prefix: :payment, default: :unpaid
 
   # Associations
@@ -43,11 +45,11 @@ class Order < ApplicationRecord
   end
 
   # Generate status_? methods
-  Order.order_statuses.each_key do |status|
-    define_method("status_#{status}?") do
-      order_status == status.to_s
-    end
+ Order.order_statuses.each_key do |status|
+  define_method("status_#{status}?") do
+    order_status == status.to_s
   end
+end
 
   # Address Methods
   def may_update_address?
@@ -76,7 +78,27 @@ class Order < ApplicationRecord
   end
 
   private
- 
+      
+ def update_inventory
+              if order_status_previously_was == 'pending' && order_paid?
+                # When order is paid, convert reserved to actual sold inventory
+                order_items.each do |item|
+                  item.item.with_lock do
+                    item.item.quantity -= item.quantity
+                    item.item.reserved -= item.quantity
+                    item.item.save!
+                  end
+                end
+              elsif order_status_previously_was == 'paid' && order_cancelled?
+                # If cancelling after payment, return inventory
+                order_items.each do |item|
+                  item.item.with_lock do
+                    item.item.quantity += item.quantity
+                    item.item.save!
+                  end
+                end
+              end
+   end      
 
   def update_shipping_address(address)
     return if address.blank?

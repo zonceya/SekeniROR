@@ -39,6 +39,8 @@ Rails.application.routes.draw do
           put :updateItem             # PUT /api/v1/items/:id/updateItem
           delete :deleteItem          # DELETE /api/v1/items/:id/deleteItem
           patch :mark_as_sold         # PATCH /api/v1/items/:id/mark_as_sold
+         post :hold                   # Reserve item (e.g. during checkout) — POST /api/v1/items/:id/hold
+         delete :release              # Release reserved item — DELETE /api/v1/items/:id/release
         end
       end
 
@@ -55,6 +57,8 @@ Rails.application.routes.draw do
           post :mark_delivered              # POST /api/v1/orders/:id/mark_delivered
           post :confirm_receipt             # POST /api/v1/orders/:id/confirm_receipt
           post :dispute                     # POST /api/v1/orders/:id/dispute
+          post '/bank_webhooks/payment_received', to: 'bank_webhooks#payment_received' 
+          # POST http://localhost:3000/api/v1/bank_webhooks/payment_received
         end
       end
 
