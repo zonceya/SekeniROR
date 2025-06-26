@@ -1,7 +1,10 @@
 module Api
   module V1    
     class ItemsController < ApplicationController
+      # Proper CSRF exemption for API endpoints
+      protect_from_forgery with: :null_session
       skip_before_action :verify_authenticity_token
+
       before_action :set_item, only: [:viewShopItem, :updateItem, :deleteItem, :mark_as_sold]
 
       def createItems
@@ -44,6 +47,17 @@ module Api
           render json: @item
         else
           render json: @item.errors, status: :unprocessable_entity
+        end
+      end
+
+      # Moved this to a separate action since it was floating in the controller
+      def reserve_item
+        item = Item.find(params[:id])
+        if item.reserved < item.quantity
+          item.increment!(:reserved)
+          render json: { message: 'Item reserved' }, status: :ok
+        else
+          render json: { error: "Item is fully reserved" }, status: :unprocessable_entity
         end
       end
 

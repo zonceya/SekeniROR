@@ -1,6 +1,6 @@
 class Order < ApplicationRecord
-  
-   after_update :update_inventory, if: :saved_change_to_order_status?
+  before_validation :assign_order_number, on: :create
+  after_update :update_inventory, if: :saved_change_to_order_status?
   enum :order_status, {
     pending: 0,
     paid: 1,
@@ -30,6 +30,7 @@ class Order < ApplicationRecord
   validates :shop_id, :buyer_id, :price, :total_amount, presence: true
   validates :price, :service_fee, :total_amount, numericality: { greater_than_or_equal_to: 0 }
   validate :addresses_format
+  validates :order_number, presence: true, uniqueness: true, length: { maximum: 20 }
 
   # Public Status Interface
   def status
@@ -99,6 +100,23 @@ end
                 end
               end
    end      
+ def assign_order_number
+  return if order_number.present?
+
+  5.times do
+    date_code = Time.current.strftime("%y%m%d")
+    buyer_initial = buyer&.name&.to_s&.first&.upcase || "X"
+    rand_code = SecureRandom.alphanumeric(2).upcase
+    candidate = "#{date_code}#{buyer_initial}#{rand_code}"
+
+    unless Order.exists?(order_number: candidate)
+      self.order_number = candidate
+      return
+    end
+  end
+
+  errors.add(:order_number, "could not generate a unique order number")
+end
 
   def update_shipping_address(address)
     return if address.blank?

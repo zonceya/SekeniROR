@@ -63,8 +63,12 @@ group :test do
   gem "capybara"
   gem "selenium-webdriver"
 end
-
+gem 'rufus-scheduler'
+gem 'whenever', require: false
+gem 'sidekiq'
+gem 'sidekiq-cron'
 gem "redis", "~> 5.4"
 gem 'bcrypt', '~> 3.1.7'
 # Gemfile
 gem 'jwt'
+gem 'jsonapi-serializer'

@@ -7,24 +7,44 @@ module Api
       skip_before_action :verify_authenticity_token
 
       # POST /orders
-      def create
-        Rails.logger.info "Creating order with params: #{order_params}"
-        
-        result = Orders::OrderCreator.call(
-          order_params.merge(buyer_id: current_user.id)
-        )
+    def create
+     Rails.logger.info "Creating order with params: #{order_params}"
+  
+        # First create a hold
+        hold = Hold.create!(
+          item_id: order_params[:item_id],
+          user_id: current_user.id,
+          quantity: order_params[:quantity] || 1,
+          expires_at: 2.minutes.from_now,
+          status: :awaiting_payment)
+hold.item.with_lock do
+  if hold.item.can_fulfill?(hold.quantity)
+    hold.item.increment!(:reserved, hold.quantity)
+  else
+    hold.destroy
+    render json: { error: "Item cannot fulfill this quantity" }, status: :unprocessable_entity and return
+  end
+end
+  # Then create the order with the hold
+  result = Orders::OrderCreator.call(
+    order_params.merge(
+      buyer_id: current_user.id,
+      hold_id: hold.id
+    )
+  )
 
-        if result.success?
-          order = result.order || result.value # Handle both Success object formats
-          render_order(order, :created)
-        else
-          Rails.logger.error "Order creation failed: #{result.errors}"
-          render json: { errors: result.errors }, status: :unprocessable_entity
-        end
-      rescue => e
-        Rails.logger.error "Order creation error: #{e.message}\n#{e.backtrace.join("\n")}"
-        render json: { errors: [e.message] }, status: :unprocessable_entity
-      end
+  if result.success?
+    order = result.order
+    render_order(order, :created)
+    else
+    # If order creation fails, expire the hold immediately
+    hold.expire! if hold.persisted?
+    render json: { errors: result.errors }, status: :unprocessable_entity
+  end
+  rescue => e
+  Rails.logger.error "Order creation error: #{e.message}"
+  render json: { errors: [e.message] }, status: :unprocessable_entity
+  end
 
       # GET /orders/:id
       def show

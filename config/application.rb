@@ -11,6 +11,14 @@ module SekeniRor
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.0
     config.active_job.queue_adapter = :sidekiq
+    config.after_initialize do
+      if Rails.env.development?
+        # Run every minute for testing
+        ExpireHoldsJob.set(wait: 1.minute).perform_later
+      end
+    end
+    config.time_zone = 'Africa/Johannesburg'
+    config.active_record.default_timezone = :local
 
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.

@@ -96,9 +96,13 @@ GEM
       rack-test (>= 0.6.3)
       regexp_parser (>= 1.5, < 3.0)
       xpath (~> 3.2)
+    chronic (0.10.2)
     concurrent-ruby (1.3.5)
     connection_pool (2.5.0)
     crass (1.0.6)
+    cronex (0.15.0)
+      tzinfo
+      unicode (>= 0.4.4.5)
     date (3.4.1)
     debug (1.10.0)
       irb (~> 1.10)
@@ -129,6 +133,8 @@ GEM
       actionview (>= 5.0.0)
       activesupport (>= 5.0.0)
     json (2.10.1)
+    jsonapi-serializer (2.2.0)
+      activesupport (>= 4.2)
     jwt (2.10.1)
       base64
     kamal (2.5.2)
@@ -285,6 +291,8 @@ GEM
       rubocop-rails
     ruby-progressbar (1.13.0)
     rubyzip (2.4.1)
+    rufus-scheduler (3.9.2)
+      fugit (~> 1.1, >= 1.11.1)
     securerandom (0.4.1)
     selenium-webdriver (4.28.0)
       base64 (~> 0.2)
@@ -298,6 +306,11 @@ GEM
       logger
       rack (>= 2.2.4)
       redis-client (>= 0.22.2)
+    sidekiq-cron (2.3.0)
+      cronex (>= 0.13.0)
+      fugit (~> 1.8, >= 1.11.1)
+      globalid (>= 1.0.1)
+      sidekiq (>= 6.5.0)
     solid_cable (3.0.7)
       actioncable (>= 7.2)
       activejob (>= 7.2)
@@ -335,6 +348,7 @@ GEM
       concurrent-ruby (~> 1.0)
     tzinfo-data (1.2025.1)
       tzinfo (>= 1.0.0)
+    unicode (0.4.4.5)
     unicode-display_width (3.1.4)
       unicode-emoji (~> 4.0, >= 4.0.4)
     unicode-emoji (4.0.4)
@@ -350,6 +364,8 @@ GEM
       base64
       websocket-extensions (>= 0.1.0)
     websocket-extensions (0.1.5)
+    whenever (1.0.0)
+      chronic (>= 0.6.3)
     xpath (3.2.0)
       nokogiri (~> 1.8)
     zeitwerk (2.7.2)
@@ -366,6 +382,7 @@ DEPENDENCIES
   debug
   importmap-rails
   jbuilder
+  jsonapi-serializer
   jwt
   kamal
   pg (~> 1.1)
@@ -375,8 +392,10 @@ DEPENDENCIES
   rails (~> 8.0.1)
   redis (~> 5.4)
   rubocop-rails-omakase
+  rufus-scheduler
   selenium-webdriver
   sidekiq
+  sidekiq-cron
   solid_cable
   solid_cache
   solid_queue
@@ -385,6 +404,7 @@ DEPENDENCIES
   turbo-rails
   tzinfo-data
   web-console
+  whenever
 
 BUNDLED WITH
    2.5.22

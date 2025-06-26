@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_04_212204) do
+ActiveRecord::Schema[8.0].define(version: 2025_06_15_031109) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -19,7 +19,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_212204) do
     t.string "endpoint_url", limit: 1024
     t.text "request_header", null: false
     t.text "request_object", null: false
-    t.text "response_object"
+    t.text "response_object", default: "{}", null: false
     t.datetime "date", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.integer "user_id"
     t.integer "status"
@@ -66,6 +66,23 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_212204) do
     t.string "display_name"
     t.string "gender_group"
     t.index ["category", "exact_age"], name: "idx_genders_category_age"
+  end
+
+  create_table "holds", force: :cascade do |t|
+    t.uuid "item_id", null: false
+    t.bigint "user_id", null: false
+    t.uuid "order_id"
+    t.integer "quantity", null: false
+    t.datetime "expires_at", null: false
+    t.string "status", default: "awaiting_payment", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "index_holds_on_expires_at"
+    t.index ["item_id"], name: "index_holds_on_item_id"
+    t.index ["order_id"], name: "index_holds_on_order_id"
+    t.index ["status"], name: "index_holds_on_status"
+    t.index ["user_id"], name: "index_holds_on_user_id"
+    t.check_constraint "status::text <> 'completed'::text OR order_id IS NOT NULL", name: "check_completed_holds_have_order"
   end
 
   create_table "item_colors", id: { type: :serial, limit: 2 }, force: :cascade do |t|
@@ -144,12 +161,13 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_212204) do
     t.string "additional_photo"
     t.string "label"
     t.decimal "price"
-    t.integer "quantity"
+    t.integer "quantity", default: 0, null: false
     t.bigint "item_condition_id"
     t.bigint "location_id"
     t.bigint "province_id"
     t.string "label_photo"
     t.integer "gender_id"
+    t.integer "reserved", default: 0, null: false
   end
 
   create_table "locations", force: :cascade do |t|
@@ -205,18 +223,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_212204) do
     t.decimal "total_amount", default: "0.0"
     t.bigint "buyer_id", null: false
     t.text "cancellation_reason"
+    t.datetime "cancelled_at", precision: nil
+    t.string "order_number", limit: 20
     t.index ["buyer_id"], name: "index_orders_on_buyer_id"
+    t.index ["order_number"], name: "index_orders_on_order_number", unique: true
+    t.unique_constraint ["order_number"], name: "orders_order_number_key"
   end
 
   create_table "profiles", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "profile_picture"
+    t.string "mobile"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "province", limit: 100
-    t.string "location", limit: 255
-    t.text "shop_description"
-    t.index ["user_id"], name: "index_profiles_on_user_id"
   end
 
   create_table "promotions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -347,6 +366,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_212204) do
   add_foreign_key "configurations", "shops", name: "configurations_shop_id_fk"
   add_foreign_key "favorites", "items", name: "favorites_item_id_fkey", on_delete: :cascade
   add_foreign_key "favorites", "users", name: "favorites_user_id_fkey", on_delete: :cascade
+  add_foreign_key "holds", "items"
+  add_foreign_key "holds", "orders"
+  add_foreign_key "holds", "users"
   add_foreign_key "item_stock", "item_conditions", column: "condition_id", name: "item_stock_condition_id_fkey"
   add_foreign_key "item_stock", "item_variants", name: "item_stock_item_variant_id_fkey"
   add_foreign_key "item_stock", "locations", name: "item_stock_location_id_fkey"
@@ -368,7 +390,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_04_212204) do
   add_foreign_key "order_items", "orders", name: "order_items_order_id_fkey"
   add_foreign_key "orders", "users", column: "buyer_id", name: "fk_buyer"
   add_foreign_key "profiles", "users"
-  add_foreign_key "profiles", "users", name: "profiles_users_fk"
   add_foreign_key "promotions", "items", name: "promotions_item_id_fkey", on_delete: :cascade
   add_foreign_key "promotions", "shops", name: "promotions_shop_id_fkey", on_delete: :cascade
   add_foreign_key "purchase_history", "items", name: "purchase_history_item_id_fkey", on_delete: :cascade

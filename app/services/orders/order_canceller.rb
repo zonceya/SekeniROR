@@ -25,6 +25,10 @@ module Orders
           cancellation_reason: @reason,
           payment_status: @order.payment_paid? ? :refunded : @order.payment_status
         )
+
+        release_inventory
+        cancel_hold
+
         success(@order)
       end
     rescue => e
@@ -32,6 +36,18 @@ module Orders
     end
 
     private
+
+    def release_inventory
+      @order.order_items.each do |order_item|
+        order_item.item.with_lock do
+          order_item.item.decrement!(:reserved, order_item.quantity)
+        end
+      end
+    end
+
+    def cancel_hold
+      @order.hold&.update!(status: :cancelled)
+    end
 
     def success(value)
       OpenStruct.new(success?: true, order: value)
