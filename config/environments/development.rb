@@ -42,7 +42,7 @@ Rails.application.configure do
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
-  config.hosts << /[a-z0-9\-]+\.ngrok\-free\.app/
+  config.hosts << "api.sekeni.xyz"
   config.force_ssl = false 
 
   config.active_job.queue_adapter = :async
