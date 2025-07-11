@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_06_15_031109) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -225,6 +225,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_15_031109) do
     t.text "cancellation_reason"
     t.datetime "cancelled_at", precision: nil
     t.string "order_number", limit: 20
+    t.text "admin_notes"
     t.index ["buyer_id"], name: "index_orders_on_buyer_id"
     t.index ["order_number"], name: "index_orders_on_order_number", unique: true
     t.unique_constraint ["order_number"], name: "orders_order_number_key"
@@ -398,7 +399,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_06_15_031109) do
   add_foreign_key "return_requests", "order_items", name: "return_requests_order_item_id_fkey", on_delete: :cascade
   add_foreign_key "schools", "locations", name: "schools_location_id_fkey"
   add_foreign_key "schools", "provinces", name: "schools_province_id_fkey", on_delete: :nullify
-  add_foreign_key "seller_archive", "shops", name: "seller_archive_shop_id_fk"
   add_foreign_key "seller_archive", "users", name: "seller_archive_user_id_fk"
   add_foreign_key "shops", "users", name: "shops_user_id_fkey"
   add_foreign_key "towns", "provinces", name: "towns_province_id_fkey", on_delete: :nullify

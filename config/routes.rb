@@ -88,6 +88,18 @@ Rails.application.routes.draw do
             delete :adminDeleteItem                        # DELETE /api/v1/admin/items/:id/adminDeleteItem
           end
         end
+
+        # ================================
+        # 🚚 Admin Order Management [NEW]
+        # ================================
+        resources :orders, only: [:index, :show] do       # GET /api/v1/admin/orders
+          collection do
+            get :bulk_index                                # GET /api/v1/admin/orders/bulk_index
+          end
+          member do
+            patch :update_status                           # PATCH /api/v1/admin/orders/:id/update_status
+          end
+        end
       end
     end
   end

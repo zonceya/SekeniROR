@@ -72,3 +72,7 @@ gem 'bcrypt', '~> 3.1.7'
 # Gemfile
 gem 'jwt'
 gem 'jsonapi-serializer'
+# Gemfile
+gem 'kaminari'  # or 'will_paginate' if you prefer
+gem 'fast_jsonapi'
+gem 'active_model_serializers'

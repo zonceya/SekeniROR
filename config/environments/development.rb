@@ -44,6 +44,7 @@ Rails.application.configure do
   config.active_support.deprecation = :log
   config.hosts << /[a-z0-9\-]+\.ngrok\-free\.app/
   config.force_ssl = false 
+   # to start cloudfare -- cloudflared tunnel run sekeni-tunnel
 
   config.active_job.queue_adapter = :async
 

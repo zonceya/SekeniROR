@@ -1,0 +1,10 @@
+:schedule:
+  expire_holds:
+    cron: "*/1 * * * *"  # Every 5 minutes
+    class: "ExpireHoldsJob"
+    queue: critical
+    description: "Expire holds and cancel associated orders"
+
+:queues:
+  - critical
+  - default
