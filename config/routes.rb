@@ -97,7 +97,7 @@ Rails.application.routes.draw do
             get :bulk_index                                # GET /api/v1/admin/orders/bulk_index
           end
           member do
-            patch :update_status                           # PATCH /api/v1/admin/orders/:id/update_status
+            patch :update_status                           # PATCH http://localhost:3000/api/v1/admin/orders/YOUR_ORDER_ID/update_status 
           end
         end
       end

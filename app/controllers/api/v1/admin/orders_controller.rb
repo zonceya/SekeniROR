@@ -36,13 +36,12 @@ module Api
 
         # PATCH /api/v1/admin/orders/:id/status
         def update_status
-          if @order.update(order_status_params)
-            OrderStatusChangeNotifier.call(@order)
-            render json: AdminOrderSerializer.new(@order).serializable_hash
-          else
-            render json: { errors: @order.errors.full_messages }, status: :unprocessable_entity
-          end
+        if @order.update(order_status_params)
+          render json: AdminOrderSerializer.new(@order).serializable_hash
+        else
+          render json: { errors: @order.errors.full_messages }, status: :unprocessable_entity
         end
+      end
 
         def bulk_index
           orders = Order.includes(:buyer, :shop, :order_items)
