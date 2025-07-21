@@ -76,3 +76,7 @@ gem 'jsonapi-serializer'
 gem 'kaminari'  # or 'will_paginate' if you prefer
 gem 'fast_jsonapi'
 gem 'active_model_serializers'
+gem 'google-apis-gmail_v1', '~> 0.46.0'
+gem 'googleauth'
+gem 'googleauth-stores'
+gem 'fileutils'

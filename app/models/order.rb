@@ -25,13 +25,14 @@ class Order < ApplicationRecord
   belongs_to :shop
   has_many :order_items, dependent: :destroy, inverse_of: :order
   accepts_nested_attributes_for :order_items
-
+  attribute :payment_initiated_at, :datetime
+  attribute :payment_expires_at, :datetime
   # Validations
   validates :shop_id, :buyer_id, :price, :total_amount, presence: true
   validates :price, :service_fee, :total_amount, numericality: { greater_than_or_equal_to: 0 }
   validate :addresses_format
   validates :order_number, presence: true, uniqueness: true, length: { maximum: 20 }
-
+  has_one :hold
   # Public Status Interface
   def status
     order_status
@@ -44,7 +45,9 @@ class Order < ApplicationRecord
   def status_label
     order_status
   end
-
+  def may_initiate_payment?
+    order_pending? && payment_unpaid? && hold.present? && hold.status_awaiting_payment?
+  end
   # Generate status_? methods
  Order.order_statuses.each_key do |status|
   define_method("status_#{status}?") do

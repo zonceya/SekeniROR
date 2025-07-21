@@ -77,7 +77,37 @@ end
           render_error(result.errors)
         end
       end
-
+      # POST /orders/:id/initiate_payment
+    def initiate_payment
+      if @order.may_initiate_payment?
+        @order.update!(
+          payment_status: :processing,
+          payment_initiated_at: Time.current,
+          payment_expires_at: 48.hours.from_now
+        )
+        
+        # Create a background job to handle expiration
+        OrderPaymentExpiryJob.set(wait_until: @order.payment_expires_at).perform_later(@order.id)
+        
+        render json: {
+          order_id: @order.id,
+          amount_due: @order.total_amount,
+          currency: "ZAR",
+          bank_details: {
+            account_name: "Sekeni Pty Ltd",
+            account_number: "1234567890",
+            bank_name: "Capitec Bank",
+            branch_code: "470010"
+          },
+          reference: @order.order_number,
+          instructions: "Use the order number as reference when making payment.",
+          expires_at: @order.payment_expires_at,
+          countdown_seconds: 48.hours.to_i
+        }, status: :ok
+      else
+        render json: { error: "Payment cannot be initiated for this order" }, status: :unprocessable_entity
+      end
+    end
       private
 
       def create_order_service
