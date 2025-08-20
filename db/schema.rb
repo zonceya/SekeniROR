@@ -85,13 +85,13 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
     t.check_constraint "status::text <> 'completed'::text OR order_id IS NOT NULL", name: "check_completed_holds_have_order"
   end
 
-  create_table "item_colors", id: { type: :serial, limit: 2 }, force: :cascade do |t|
+  create_table "item_colors", id: :serial, force: :cascade do |t|
     t.string "name", null: false
 
     t.unique_constraint ["name"], name: "item_colors_name_key"
   end
 
-  create_table "item_conditions", id: { type: :serial, limit: 2 }, force: :cascade do |t|
+  create_table "item_conditions", id: :serial, force: :cascade do |t|
     t.string "name", null: false
     t.text "description"
 
