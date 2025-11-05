@@ -7,8 +7,8 @@ module Api
       skip_before_action :verify_authenticity_token
 
       # POST /orders
-    def create
-     Rails.logger.info "Creating order with params: #{order_params}"
+      def create
+        Rails.logger.info "Creating order with params: #{order_params}"
   
         # First create a hold
         hold = Hold.create!(
@@ -16,35 +16,38 @@ module Api
           user_id: current_user.id,
           quantity: order_params[:quantity] || 1,
           expires_at: 2.minutes.from_now,
-          status: :awaiting_payment)
-hold.item.with_lock do
-  if hold.item.can_fulfill?(hold.quantity)
-    hold.item.increment!(:reserved, hold.quantity)
-  else
-    hold.destroy
-    render json: { error: "Item cannot fulfill this quantity" }, status: :unprocessable_entity and return
-  end
-end
-  # Then create the order with the hold
-  result = Orders::OrderCreator.call(
-    order_params.merge(
-      buyer_id: current_user.id,
-      hold_id: hold.id
-    )
-  )
+          status: :awaiting_payment
+        )
+        
+        hold.item.with_lock do
+          if hold.item.can_fulfill?(hold.quantity)
+            hold.item.increment!(:reserved, hold.quantity)
+          else
+            hold.destroy
+            render json: { error: "Item cannot fulfill this quantity" }, status: :unprocessable_entity and return
+          end
+        end
+        
+        # Then create the order with the hold
+        result = Orders::OrderCreator.call(
+          order_params.merge(
+            buyer_id: current_user.id,
+            hold_id: hold.id
+          )
+        )
 
-  if result.success?
-    order = result.order
-    render_order(order, :created)
-    else
-    # If order creation fails, expire the hold immediately
-    hold.expire! if hold.persisted?
-    render json: { errors: result.errors }, status: :unprocessable_entity
-  end
-  rescue => e
-  Rails.logger.error "Order creation error: #{e.message}"
-  render json: { errors: [e.message] }, status: :unprocessable_entity
-  end
+        if result.success?
+          order = result.order
+          render_order(order, :created)
+        else
+          # If order creation fails, expire the hold immediately
+          hold.expire! if hold.persisted?
+          render json: { errors: result.errors }, status: :unprocessable_entity
+        end
+      rescue => e
+        Rails.logger.error "Order creation error: #{e.message}"
+        render json: { errors: [e.message] }, status: :unprocessable_entity
+      end
 
       # GET /orders/:id
       def show
@@ -76,38 +79,8 @@ end
         else
           render_error(result.errors)
         end
-      end
-      # POST /orders/:id/initiate_payment
-    def initiate_payment
-      if @order.may_initiate_payment?
-        @order.update!(
-          payment_status: :processing,
-          payment_initiated_at: Time.current,
-          payment_expires_at: 48.hours.from_now
-        )
-        
-        # Create a background job to handle expiration
-        OrderPaymentExpiryJob.set(wait_until: @order.payment_expires_at).perform_later(@order.id)
-        
-        render json: {
-          order_id: @order.id,
-          amount_due: @order.total_amount,
-          currency: "ZAR",
-          bank_details: {
-            account_name: "Sekeni Pty Ltd",
-            account_number: "1234567890",
-            bank_name: "Capitec Bank",
-            branch_code: "470010"
-          },
-          reference: @order.order_number,
-          instructions: "Use the order number as reference when making payment.",
-          expires_at: @order.payment_expires_at,
-          countdown_seconds: 48.hours.to_i
-        }, status: :ok
-      else
-        render json: { error: "Payment cannot be initiated for this order" }, status: :unprocessable_entity
-      end
-    end
+      end    
+
       private
 
       def create_order_service

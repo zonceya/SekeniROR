@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_01_124027) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -57,6 +57,18 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
 
     t.unique_constraint ["user_id", "item_id"], name: "favorites_user_id_item_id_key"
+  end
+
+  create_table "flagged_payments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "order_id"
+    t.decimal "expected_amount", precision: 10, scale: 2
+    t.decimal "received_amount", precision: 10, scale: 2
+    t.string "reference"
+    t.string "bank"
+    t.string "status"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["order_id"], name: "index_flagged_payments_on_order_id"
   end
 
   create_table "genders", id: :serial, force: :cascade do |t|
@@ -188,6 +200,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
   end
 
+  create_table "notifications", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "notifiable_type", null: false
+    t.bigint "notifiable_id", null: false
+    t.string "title"
+    t.string "message"
+    t.string "notification_type"
+    t.string "status"
+    t.boolean "read"
+    t.datetime "delivered_at"
+    t.boolean "firebase_sent"
+    t.text "firebase_response"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["notifiable_type", "notifiable_id"], name: "index_notifications_on_notifiable"
+    t.index ["user_id"], name: "index_notifications_on_user_id"
+  end
+
   create_table "order_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "order_id"
     t.uuid "item_id"
@@ -204,6 +234,21 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
     t.integer "quantity", default: 1, null: false
     t.index ["item_id"], name: "index_order_items_on_item_id"
     t.index ["order_id"], name: "index_order_items_on_order_id"
+  end
+
+  create_table "order_transactions", force: :cascade do |t|
+    t.uuid "order_id", null: false
+    t.decimal "amount", precision: 10, scale: 2, null: false
+    t.string "txn_status", null: false
+    t.string "payment_method"
+    t.string "bank_ref_num"
+    t.string "bank"
+    t.datetime "txn_time"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["bank_ref_num"], name: "index_order_transactions_on_bank_ref_num"
+    t.index ["order_id"], name: "index_order_transactions_on_order_id"
+    t.index ["txn_status"], name: "index_order_transactions_on_txn_status"
   end
 
   create_table "orders", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -226,6 +271,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
     t.datetime "cancelled_at", precision: nil
     t.string "order_number", limit: 20
     t.text "admin_notes"
+    t.text "payment_proof"
+    t.text "proof_notes"
+    t.datetime "paid_at"
+    t.string "bank"
     t.index ["buyer_id"], name: "index_orders_on_buyer_id"
     t.index ["order_number"], name: "index_orders_on_order_number", unique: true
     t.unique_constraint ["order_number"], name: "orders_order_number_key"
@@ -292,7 +341,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
     t.datetime "deleted_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
   end
 
-  create_table "shops", id: :bigint, default: nil, force: :cascade do |t|
+  create_table "shops", force: :cascade do |t|
     t.bigint "user_id"
     t.string "name", null: false
     t.text "description"
@@ -367,6 +416,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
   add_foreign_key "configurations", "shops", name: "configurations_shop_id_fk"
   add_foreign_key "favorites", "items", name: "favorites_item_id_fkey", on_delete: :cascade
   add_foreign_key "favorites", "users", name: "favorites_user_id_fkey", on_delete: :cascade
+  add_foreign_key "flagged_payments", "orders"
   add_foreign_key "holds", "items"
   add_foreign_key "holds", "orders"
   add_foreign_key "holds", "users"
@@ -386,9 +436,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_11_202528) do
   add_foreign_key "items", "provinces", name: "items_province_id_fkey", on_delete: :nullify
   add_foreign_key "items", "schools", name: "items_school_id_fkey"
   add_foreign_key "locations", "towns", name: "locations_town_id_fkey", on_delete: :nullify
+  add_foreign_key "notifications", "users"
   add_foreign_key "order_items", "item_variants", name: "order_items_item_variant_id_fkey"
   add_foreign_key "order_items", "items", name: "order_items_item_id_fkey"
   add_foreign_key "order_items", "orders", name: "order_items_order_id_fkey"
+  add_foreign_key "order_transactions", "orders"
   add_foreign_key "orders", "users", column: "buyer_id", name: "fk_buyer"
   add_foreign_key "profiles", "users"
   add_foreign_key "promotions", "items", name: "promotions_item_id_fkey", on_delete: :cascade

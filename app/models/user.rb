@@ -2,7 +2,7 @@ class User < ApplicationRecord
   has_one :profile, dependent: :destroy
   has_many :user_sessions, dependent: :destroy
   has_one :shop, dependent: :destroy
-
+  has_many :notifications, dependent: :destroy
   has_secure_password validations: false # Disable default validations
 
   # Password validation

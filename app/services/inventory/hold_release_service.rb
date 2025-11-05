@@ -1,3 +1,4 @@
+# app/services/inventory/hold_release_service.rb
 module Inventory
   class HoldReleaseService
     def initialize(hold)

@@ -1,7 +1,7 @@
 require 'redis'
 
 class Api::V1::UsersController < ApplicationController
-  skip_before_action :verify_authenticity_token, only: [:sign_in, :update_mobile, :disable,:reactivate]
+  skip_before_action :verify_authenticity_token, only: [:sign_in, :update_mobile, :disable,:reactivate,:update_firebase_token ]
   before_action :authenticate_user, except: [:sign_in, :reactivate]
  
   def sign_in
@@ -94,7 +94,10 @@ class Api::V1::UsersController < ApplicationController
       render json: { error: "Invalid request or account not deactivated." }, status: :unprocessable_entity
     end
   end
-
+  def update_firebase_token
+    @current_user.update(firebase_token: params[:token])
+    render json: { message: 'Firebase token updated successfully' }
+  end
   private
 
   def create_profile_for(user)
@@ -102,8 +105,18 @@ class Api::V1::UsersController < ApplicationController
   end
 
   def create_shop_for(user)
-    user.create_shop(name: "#{user.name}'s Shop") unless user.shop
+  return if user.shop
+  
+  shop = user.build_shop(
+    name: "#{user.name}'s Shop",
+    description: "Shop for #{user.name}"
+  )
+  
+  unless shop.save
+    Rails.logger.error "Failed to create shop: #{shop.errors.full_messages}"
+    # Don't raise error here to avoid breaking user creation
   end
+end
 
   def create_session_for(user)
     user.user_sessions.destroy_all

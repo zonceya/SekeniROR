@@ -4,7 +4,8 @@ class Hold < ApplicationRecord
     awaiting_payment: "awaiting_payment",
     completed: "completed",
     expired: "expired",
-    cancelled: "cancelled"
+    cancelled: "cancelled",
+    released: "released"
   }.freeze
 
   # Set default value

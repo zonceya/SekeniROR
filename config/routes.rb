@@ -4,43 +4,43 @@ Rails.application.routes.draw do
       # ================================
       # 👤 User routes
       # ================================
-      post 'users/sign_in', to: 'users#sign_in'            # POST /api/v1/users/sign_in
-      get 'users/profile', to: 'users#profile'             # GET /api/v1/users/profile
-      put 'users/update_mobile', to: 'users#update_mobile' # PUT /api/v1/users/update_mobile
-      post 'users/disable', to: 'users#disable'            # POST /api/v1/users/disable
-      put 'users/reactivate', to: 'users#reactivate'       # PUT /api/v1/users/reactivate
-
+      post 'users/sign_in', to: 'users#sign_in'
+      get 'users/profile', to: 'users#profile'
+      put 'users/update_mobile', to: 'users#update_mobile'
+      post 'users/disable', to: 'users#disable'
+      put 'users/reactivate', to: 'users#reactivate'
+      post 'users/firebase_token', to: 'users#update_firebase_token'
       # ================================
       # 🏪 Shop & item-related routes
       # ================================
-      resource :shop, only: [:show]                        # GET /api/v1/shop
-      resources :item_types, only: [:index]                # GET /api/v1/item_types
-      resources :brands, only: [:index]                    # GET /api/v1/brands
-      resources :item_sizes, only: [:index]                # GET /api/v1/item_sizes
-      resources :item_conditions, only: [:index]           # GET /api/v1/item_conditions
-      resources :item_colors, only: [:index]               # GET /api/v1/item_colors
-      resources :provinces, only: [:index]                 # GET /api/v1/provinces
-      resources :locations, only: [:index]                 # GET /api/v1/locations
-      resources :schools, only: [:index]                   # GET /api/v1/schools
-      resources :categories, only: [:index]                # GET /api/v1/categories
-      resources :tags, only: [:index]                      # GET /api/v1/tags
-      resources :item_tags, only: [:index]                 # GET /api/v1/item_tags
+      resource :shop, only: [:show]
+      resources :item_types, only: [:index]
+      resources :brands, only: [:index]
+      resources :item_sizes, only: [:index]
+      resources :item_conditions, only: [:index]
+      resources :item_colors, only: [:index]
+      resources :provinces, only: [:index]
+      resources :locations, only: [:index]
+      resources :schools, only: [:index]
+      resources :categories, only: [:index]
+      resources :tags, only: [:index]
+      resources :item_tags, only: [:index]
 
       # ================================
       # 📦 Custom item routes
       # ================================
       resources :items, only: [] do
         collection do
-          post :createItems           # POST /api/v1/items/createItems
-          get :viewAllShopItems       # GET /api/v1/items/viewAllShopItems
+          post :createItems
+          get :viewAllShopItems
         end
         member do
-          get :viewShopItem           # GET /api/v1/items/:id/viewShopItem
-          put :updateItem             # PUT /api/v1/items/:id/updateItem
-          delete :deleteItem          # DELETE /api/v1/items/:id/deleteItem
-          patch :mark_as_sold         # PATCH /api/v1/items/:id/mark_as_sold
-         post :hold                   # Reserve item (e.g. during checkout) — POST /api/v1/items/:id/hold
-         delete :release              # Release reserved item — DELETE /api/v1/items/:id/release
+          get :viewShopItem
+          put :updateItem
+          delete :deleteItem
+          patch :mark_as_sold
+          post :hold
+          delete :release
         end
       end
 
@@ -49,18 +49,32 @@ Rails.application.routes.draw do
       # ================================
       resources :orders, only: [:create, :show] do
         member do
-          patch :addresses                   # PATCH /api/v1/orders/:id/addresses
-          post :cancel                      # POST /api/v1/orders/:id/cancel
-          post :initiate_payment            # POST /api/v1/orders/:id/initiate_payment
-          post :pay                         # POST /api/v1/orders/:id/pay
-          post :dispatch                    # POST /api/v1/orders/:id/dispatch
-          post :mark_delivered              # POST /api/v1/orders/:id/mark_delivered
-          post :confirm_receipt             # POST /api/v1/orders/:id/confirm_receipt
-          post :dispute                     # POST /api/v1/orders/:id/dispute
-          post '/bank_webhooks/payment_received', to: 'bank_webhooks#payment_received' 
-          # POST http://localhost:3000/api/v1/bank_webhooks/payment_received
+          patch :addresses
+          post :cancel
+          # REMOVED: post :initiate_payment (moved to payments controller)
+          post :pay
+          post :dispatch
+          post :mark_delivered
+          post :confirm_receipt
+          post :dispute
+          post :submit_payment_proof
+        end
+        
+        # ADD THESE PAYMENT ROUTES:
+        resources :payments, only: [] do
+          collection do
+            post :initiate
+            get :status
+            get :transactions
+            post :upload_proof
+          end
         end
       end
+      
+      # ADD BANK DETAILS ROUTE:
+      get 'payments/bank_details', to: 'payments#bank_details'
+
+      post '/bank_webhooks/payment_received', to: 'bank_webhooks#payment_received'
 
       # ================================
       # 🔐 Admin routes
@@ -76,31 +90,52 @@ Rails.application.routes.draw do
         # Admin User Management
         patch 'users/:id/update_password', to: 'users#update_password'
         resources :users, only: [:index, :show, :update, :destroy] do
-          post :reactivate, on: :member                    # POST /api/v1/admin/users/:id/reactivate
+          post :reactivate, on: :member
         end
 
         # Admin Item Management
         resources :items, only: [] do
           collection do
-            get :adminViewAllItems                         # GET /api/v1/admin/items/adminViewAllItems
+            get :adminViewAllItems
           end
           member do
-            delete :adminDeleteItem                        # DELETE /api/v1/admin/items/:id/adminDeleteItem
+            delete :adminDeleteItem
           end
         end
 
         # ================================
-        # 🚚 Admin Order Management [NEW]
+        # 🚚 Admin Order Management
         # ================================
-        resources :orders, only: [:index, :show] do       # GET /api/v1/admin/orders
+        resources :orders, only: [:index, :show] do
           collection do
-            get :bulk_index                                # GET /api/v1/admin/orders/bulk_index
+            get :bulk_index
           end
           member do
-            patch :update_status                           # PATCH http://localhost:3000/api/v1/admin/orders/YOUR_ORDER_ID/update_status 
+            patch :update_status
+          end
+        end
+        
+        # ADD ADMIN PAYMENT ROUTES:
+        resources :payments, only: [] do
+          collection do
+            get :flagged
+            get :proofs
+          end
+          member do
+            patch :approve_proof
+            patch :reject_proof
+            post :manual_verification
           end
         end
       end
+      resources :notifications, only: [:index] do
+      member do
+        put :read, to: 'notifications#mark_as_read'
+      end
+      collection do
+        get :unread_count, to: 'notifications#unread_count'
+      end
+    end
     end
   end
 end

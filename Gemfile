@@ -2,7 +2,7 @@ source "https://rubygems.org"
 
 gem "rails", "~> 8.0.1"
 gem "propshaft"
-gem "pg", "~> 1.1"
+gem 'pg', '>= 1.6.2'
 gem "puma", ">= 5.0"
 gem "importmap-rails"
 gem "turbo-rails"
@@ -49,3 +49,6 @@ gem 'google-apis-gmail_v1', '~> 0.45.0'
 gem 'googleauth'
 gem 'fileutils'
 gem "fiddle" # to silence Ruby 3.5 warning about fiddle
+# Gemfile
+gem 'fcm'
+gem "dotenv-rails", "~> 3.1"

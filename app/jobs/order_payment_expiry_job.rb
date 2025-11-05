@@ -8,7 +8,7 @@ class OrderPaymentExpiryJob < ApplicationJob
 
     ActiveRecord::Base.transaction do
       order.update!(
-        payment_status: :unpaid,
+        payment_status: :expired,
         order_status: :cancelled
       )
       

@@ -1,3 +1,4 @@
+# app/services/payments/bank_transfer_confirmation_service.rb
 module Payments
   class BankTransferConfirmationService
     def initialize(order)
@@ -8,6 +9,7 @@ module Payments
       ActiveRecord::Base.transaction do
         confirm_payment!
         convert_hold_to_reservation!
+        create_transaction_record!
       end
       OpenStruct.new(success?: true, order: @order)
     rescue => e
@@ -18,9 +20,19 @@ module Payments
 
     def confirm_payment!
       @order.update!(
-        order_status: :payment_received,
+        order_status: :paid,
         payment_status: :paid,
         paid_at: Time.current
+      )
+    end
+
+    def create_transaction_record!
+      OrderTransaction.create!(
+        order: @order,
+        amount: @order.total_amount,
+        txn_status: :received,
+        payment_method: :eft,
+        txn_time: Time.current
       )
     end
 

@@ -32,5 +32,6 @@ module SekeniRor
     #
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
+    config.x.gmail_reader.mock_mode = true
   end
 end
