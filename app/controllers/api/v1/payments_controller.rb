@@ -3,8 +3,8 @@ module Api
   module V1
     class PaymentsController < Api::V1::BaseController
       before_action :authenticate_request!
-      before_action :set_order, only: [:initiate, :status, :transactions, :upload_proof]
-      before_action :authorize_order_access, only: [:initiate, :status, :transactions, :upload_proof]
+      before_action :set_order, only: [:initiate, :status, :transactions, :upload_proof,:confirm_payment]
+      before_action :authorize_order_access, only: [:initiate, :status, :transactions, :upload_proof,:confirm_payment]
 
       # POST /api/v1/orders/:id/initiate_payment
       def initiate
@@ -117,16 +117,93 @@ module Api
         end
       end
 
-      # POST /api/v1/payments/hold_item
- 
+    
+def confirm_payment
+  if @order.may_mark_as_paid?
+    @order.mark_as_paid
+
+    # Find or create chat room (handles uniqueness constraint)
+    chat_room = ChatRoom.find_or_create_by(order: @order) do |room|
+      room.buyer = @order.buyer
+      room.seller = @order.shop.user
+      room.room_id = "order_#{@order.id}_#{SecureRandom.hex(4)}"
+    end
+
+    # Send system message
+    ChatMessage.create!(
+      chat_room: chat_room,
+      sender: @order.buyer,
+      content: "Payment received. You can now chat to arrange collection or delivery.",
+      message_type: :system
+    )
+
+    # Send FCM notifications
+    send_chat_notifications(chat_room)
+
+    render json: {
+      message: "Payment confirmed successfully",
+      order: {
+        id: @order.id,
+        order_number: @order.order_number,
+        status: @order.order_status,
+        payment_status: @order.payment_status,
+        paid_at: @order.paid_at
+      },
+      chat_room: {
+        id: chat_room.id,
+        room_id: chat_room.room_id
+      },
+      notification: "Chat room created. Both parties notified."
+    }, status: :ok
+  else
+    render json: { error: "Payment cannot be confirmed for this order" }, status: :unprocessable_entity
+  end
+end
+
+private
+
+def send_chat_notifications(chat_room)
+  # Notify both buyer and seller
+  [chat_room.buyer, chat_room.seller].each do |user|
+    notification = Notification.create!(
+      user: user,
+      title: "Chat started for Order ##{@order.order_number}",
+      message: "Payment received. You can now chat to arrange collection or delivery.",
+      notifiable: chat_room,
+      notification_type: 'message_received' # ✅ Use valid notification type
+    )
+    
+    # Send FCM notification
+    FirebaseNotificationService.deliver_later(notification) if user.firebase_token.present?
+  end
+rescue StandardError => e
+  Rails.logger.error "Error sending chat notifications: #{e.message}"
+  # Don't fail the entire request if notifications fail
+end
 
       private
-
-      def set_order
-        @order = Order.includes(:order_items, :shop).find(params[:id])
+    def send_chat_notifications(chat_room)
+      # Notify both buyer and seller
+      [chat_room.buyer, chat_room.seller].each do |user|
+        notification = Notification.create!(
+          user: user,
+          title: "Chat started for Order ##{@order.order_number}",
+          message: "Payment received. You can now chat to arrange collection or delivery.",
+          notifiable: chat_room,
+          notification_type: 'chat_started'
+        )
+        
+        # Send FCM notification
+        FirebaseNotificationService.deliver_later(notification)
+      end
+    end
+    def set_order
+  # For nested routes, use order_id instead of id
+        order_id = params[:order_id] || params[:id]
+        @order = Order.includes(:order_items, :shop).find(order_id)
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Order not found' }, status: :not_found
-      end
+    end
 
     def format_order_transaction(transaction)
       {

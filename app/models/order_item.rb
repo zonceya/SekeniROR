@@ -12,27 +12,24 @@ class OrderItem < ApplicationRecord
 
   def update_inventory
     if order_status_previously_was == 'pending' && order_paid?
-      order_items.each do |order_item|
-        order_item.item.with_lock do
-          if hold
-            # For held items, just reduce the reserved count
-            order_item.item.decrement!(:reserved, order_item.quantity)
-          else
-            # For non-held items, reduce both quantity and reserved
-            order_item.item.decrement!(:quantity, order_item.quantity)
-            order_item.item.decrement!(:reserved, order_item.quantity)
-          end
+      # When order is paid, convert reserved to actual sold inventory
+      # Only decrease the quantity, don't touch reserved (it was already reserved)
+      order_items.each do |item|
+        item.item.with_lock do
+          item.item.quantity -= item.quantity
+          # Don't decrease reserved here - it was already reserved during hold creation
+          item.item.save!
         end
       end
     elsif order_status_previously_was == 'paid' && order_cancelled?
-      order_items.each do |order_item|
-        next if hold # Don't return inventory for held items that were completed
-        
-        order_item.item.with_lock do
-          order_item.item.increment!(:quantity, order_item.quantity)
+      # If cancelling after payment, return inventory to quantity
+      order_items.each do |item|
+        item.item.with_lock do
+          item.item.quantity += item.quantity
+          item.item.save!
         end
       end
-    end
+      end
   end
 
   private

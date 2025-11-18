@@ -32,7 +32,8 @@ class Order < ApplicationRecord
   accepts_nested_attributes_for :order_items
   attribute :payment_initiated_at, :datetime
   attribute :payment_expires_at, :datetime
-  
+  has_many :pin_verifications, dependent: :destroy
+  has_many :ratings, dependent: :destroy
   # Validations
   validates :shop_id, :buyer_id, :price, :total_amount, presence: true
   validates :price, :service_fee, :total_amount, numericality: { greater_than_or_equal_to: 0 }
@@ -99,7 +100,9 @@ class Order < ApplicationRecord
     errors.add(:base, e.message)
     false
   end
-
+  def paid?
+    payment_paid?  # This uses the enum prefix
+  end
   # Cache
   def cache_version
     updated_at.to_i
@@ -111,6 +114,22 @@ class Order < ApplicationRecord
 
   def payment_issues?
     [:awaiting_verification, :amount_mismatch].include?(payment_status.to_sym)
+  end
+  def mark_as_paid
+    return unless may_mark_as_paid?
+    
+    update!(
+      payment_status: :paid,
+      paid_at: Time.current,
+      order_status: :paid  # Use 'paid' instead of 'ready_for_collection'
+    )
+    
+    # Notify seller
+    notify_seller_payment_received
+  end
+  def may_mark_as_paid?
+    # Use the prefixed enum methods
+    payment_unpaid? || payment_processing?
   end
   private
    def payment_status_changed_to_paid?
@@ -191,7 +210,21 @@ class Order < ApplicationRecord
       errors.add(field, "must be a JSON object")
     end
   end  
+  def notify_seller_payment_received
+  seller = shop.user
+  
+  # Create notification for seller
+  notification = seller.notifications.create!(
+    title: "Payment Received - Order Ready for Collection",
+    message: "Payment confirmed for Order ##{order_number}. Item is ready for collection.",
+    notification_type: :payment_received,
+    notifiable: self,
+    status: :pending
+  )
 
+  # Send push notification via Firebase
+  FirebaseNotificationService.deliver(notification)
+end
   
   # app/models/order.rb
   def process_refund(amount, reason, processed_by)
@@ -213,6 +246,6 @@ class Order < ApplicationRecord
         update!(payment_status: :refunded)
       end
     end
-  end
+  end  
   
 end

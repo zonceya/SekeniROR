@@ -1,11 +1,22 @@
 module Api
   module V1    
     class ItemsController < ApplicationController
-      # Proper CSRF exemption for API endpoints
       protect_from_forgery with: :null_session
       skip_before_action :verify_authenticity_token
 
-      before_action :set_item, only: [:viewShopItem, :updateItem, :deleteItem, :mark_as_sold]
+      def index
+        items = Item.where(deleted: false, status: 'active')
+        
+        # Apply sorting
+        if params[:sort] == 'newest'
+          items = items.order(created_at: :desc)
+        end
+        
+        # Apply limit
+        items = items.limit(params[:limit]) if params[:limit]
+        
+        render json: items.includes(:shop)
+      end
 
       def createItems
         item = Item.new(item_params.except(:tag_ids))
@@ -50,7 +61,6 @@ module Api
         end
       end
 
-      # Moved this to a separate action since it was floating in the controller
       def reserve_item
         item = Item.find(params[:id])
         if item.reserved < item.quantity

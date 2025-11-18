@@ -1,9 +1,11 @@
 class Api::V1::BaseController < ApplicationController
+    protect_from_forgery with: :null_session
+    skip_before_action :verify_authenticity_token
     include Authenticatable  # your auth concern
     puts "[DEBUG] Included modules in BaseController: #{included_modules.inspect}"
     include RequestLogger
     around_action :log_request_response
-    protect_from_forgery with: :null_session
+    
     private
   
     def log_request_response

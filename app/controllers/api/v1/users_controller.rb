@@ -3,7 +3,9 @@ require 'redis'
 class Api::V1::UsersController < ApplicationController
   skip_before_action :verify_authenticity_token, only: [:sign_in, :update_mobile, :disable,:reactivate,:update_firebase_token ]
   before_action :authenticate_user, except: [:sign_in, :reactivate]
- 
+   # has_many :buyer_chat_rooms, class_name: 'ChatRoom', foreign_key: 'buyer_id'
+  # has_many :seller_chat_rooms, class_name: 'ChatRoom', foreign_key: 'seller_id'
+
   def sign_in
     user = User.find_or_initialize_by(email: params[:email])
     @current_user = user unless user.new_record?
@@ -43,6 +45,9 @@ class Api::V1::UsersController < ApplicationController
     }, status: :ok
   end
   
+   def chat_rooms
+    ChatRoom.where('buyer_id = ? OR seller_id = ?', id, id)
+  end
 
   def profile
     cached_profile = redis.get("user_#{@current_user.id}_profile")
@@ -53,7 +58,22 @@ class Api::V1::UsersController < ApplicationController
       render json: { user: @current_user, profile: @current_user.profile }, status: :ok
     end
   end
+  def user_ratings
+    user = User.find(params[:user_id])
+    ratings = Rating.where(rated_id: user.id, rating_type: 'seller_to_buyer')
+                  .includes(:rater, :shop)
+                  .order(created_at: :desc)
+    
+    user_rating = UserRating.find_or_create_by(user_id: user.id)
 
+    render json: {
+      user_rating: {
+        average_rating: user_rating.average_rating,
+        total_ratings: user_rating.total_ratings
+      },
+      ratings: ratings.map { |r| serialize_user_rating(r) }
+    }, status: :ok
+  end
   def update_mobile
     unless params[:mobile].present?
       return render json: { error: "Mobile number is required." }, status: :unprocessable_entity
@@ -94,10 +114,23 @@ class Api::V1::UsersController < ApplicationController
       render json: { error: "Invalid request or account not deactivated." }, status: :unprocessable_entity
     end
   end
-  def update_firebase_token
-    @current_user.update(firebase_token: params[:token])
-    render json: { message: 'Firebase token updated successfully' }
+ def update_firebase_token
+  unless params[:token].present?
+    return render json: { error: "Firebase token is required" }, status: :unprocessable_entity
   end
+
+  if @current_user.update(firebase_token: params[:token])
+    render json: { 
+      message: 'Firebase token updated successfully',
+      firebase_token: @current_user.firebase_token
+    }
+  else
+    render json: { 
+      error: 'Failed to update firebase token',
+      details: @current_user.errors.full_messages 
+    }, status: :unprocessable_entity
+  end
+end
   private
 
   def create_profile_for(user)
@@ -148,5 +181,22 @@ end
     else
       render json: { error: "Unauthorized" }, status: :unauthorized
     end
+  end
+    def serialize_user_rating(rating)
+    {
+      id: rating.id,
+      rating: rating.rating,
+      review: rating.review,
+      created_at: rating.created_at,
+      rater: {
+        id: rating.rater.id,
+        name: rating.rater.name,
+        avatar: rating.rater.avatar_url
+      },
+      shop: {
+        id: rating.shop.id,
+        name: rating.shop.name
+      }
+    }
   end
 end

@@ -80,7 +80,7 @@ module Api
           render_error(result.errors)
         end
       end    
-
+      
       private
 
       def create_order_service
@@ -133,7 +133,7 @@ module Api
       def cancellation_params
         params.permit(:reason)
       end
-
+     
       def render_order(order, status = :ok)
         render json: OrderSerializer.new(order).as_json, status: status
       end

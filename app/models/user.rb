@@ -4,7 +4,9 @@ class User < ApplicationRecord
   has_one :shop, dependent: :destroy
   has_many :notifications, dependent: :destroy
   has_secure_password validations: false # Disable default validations
-
+  has_one :digital_wallet, dependent: :destroy
+  has_many :buyer_chat_rooms, class_name: 'ChatRoom', foreign_key: 'buyer_id'
+  has_many :seller_chat_rooms, class_name: 'ChatRoom', foreign_key: 'seller_id'
   # Password validation
   validates :password, 
             presence: { if: :password_required? },
@@ -14,8 +16,12 @@ class User < ApplicationRecord
   after_commit :create_shop_for_user, on: :create
   after_create :create_profile_for_user
   before_destroy :set_logout_time
-
+  after_create :create_digital_wallet, unless: :digital_wallet
   scope :admins, -> { where(role: 'admin') }
+  
+ def chat_rooms
+    ChatRoom.where('buyer_id = ? OR seller_id = ?', id, id)
+  end
 
   # Update user without requiring password
   def update_without_password(params)
@@ -41,6 +47,9 @@ class User < ApplicationRecord
   false
 end
 
+def create_digital_wallet
+    DigitalWallet.create(user: self)
+  end
 
   def create_shop_for_user
     return if shop.present?
