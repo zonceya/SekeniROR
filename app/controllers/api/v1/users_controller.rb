@@ -132,7 +132,9 @@ class Api::V1::UsersController < ApplicationController
   end
 end
   private
-
+  def redis
+    @redis ||= Redis.new(url: ENV['REDIS_URL'] || 'redis://localhost:6379')
+  end
   def create_profile_for(user)
     user.create_profile(image: params[:profileUrl] || "default.png") unless user.profile
   end
