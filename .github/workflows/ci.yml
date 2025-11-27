@@ -17,7 +17,7 @@ jobs:
           ruby-version: .ruby-version
           bundler-cache: true
       - name: Scan for common Rails security vulnerabilities using static analysis
-        run: bundle exec brakeman --no-pager --exit-on-warn 0
+        run: bundle exec brakeman --no-pager --exit-on-warn 0 --rails-root .
 
   lint:
     runs-on: ubuntu-latest
@@ -30,8 +30,9 @@ jobs:
           ruby-version: .ruby-version
           bundler-cache: true
       - name: Lint code for consistent style
-        run:  bundle exec rubocop -a -f github 
-         
+        run: |
+          bundle exec rubocop --auto-correct-all || true
+          bundle exec rubocop --format simple
 
   test:
     runs-on: ubuntu-latest
