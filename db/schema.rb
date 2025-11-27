@@ -39,6 +39,27 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_14_194049) do
     t.index ["digital_wallet_id"], name: "index_bank_accounts_on_digital_wallet_id"
   end
 
+  create_table "banners", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "title", null: false
+    t.text "description"
+    t.string "image_url", null: false
+    t.string "thumbnail_url"
+    t.string "redirect_url"
+    t.string "banner_type", default: "home"
+    t.uuid "target_id"
+    t.string "target_type"
+    t.integer "position", default: 0
+    t.boolean "active", default: true
+    t.datetime "start_date", precision: nil
+    t.datetime "end_date", precision: nil
+    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.index ["active"], name: "idx_banners_active", where: "(active = true)"
+    t.index ["banner_type"], name: "idx_banners_type"
+    t.index ["position"], name: "idx_banners_position"
+    t.index ["start_date", "end_date"], name: "idx_banners_dates"
+  end
+
   create_table "brands", id: :serial, force: :cascade do |t|
     t.string "name", limit: 64, null: false
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
@@ -54,6 +75,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_14_194049) do
     t.bigint "parent_id"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.string "image_url"
 
     t.unique_constraint ["slug"], name: "categories_slug_key"
   end
@@ -249,6 +271,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_14_194049) do
     t.string "label_photo"
     t.integer "gender_id"
     t.integer "reserved", default: 0, null: false
+    t.index ["id"], name: "idx_items_category"
   end
 
   create_table "locations", force: :cascade do |t|
