@@ -17,8 +17,8 @@ jobs:
           ruby-version: .ruby-version
           bundler-cache: true
       - name: Scan for common Rails security vulnerabilities using static analysis
-        run: bundle exec brakeman --no-pager --exit-on-warn 0 .
-
+        run: bundle exec brakeman --no-pager --exit-on-warn 0 -p .
+ 
   lint:
     runs-on: ubuntu-latest
     steps:
