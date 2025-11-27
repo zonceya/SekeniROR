@@ -1,18 +1,27 @@
-module Api
+﻿module Api
   module V1
-    class ItemsController < ApplicationController
+    class ItemTypesController < BaseController
+      before_action :authenticate_user!
+
       def index
-        items = Item.where(deleted: false, status: 'active')
-        
-        # Apply sorting
-        if params[:sort] == 'newest'
-          items = items.order(created_at: :desc)
-        end
-        
-        # Apply limit
-        items = items.limit(params[:limit]) if params[:limit]
-        
-        render json: items.includes(:shop).as_json(include: { shop: { only: [:id, :name] } })
+        item_types = ItemType.all
+        render json: {
+          success: true,
+          item_types: item_types
+        }
+      end
+
+      def show
+        item_type = ItemType.find(params[:id])
+        render json: {
+          success: true,
+          item_type: item_type
+        }
+      rescue ActiveRecord::RecordNotFound
+        render json: {
+          success: false,
+          error: 'Item type not found'
+        }, status: :not_found
       end
     end
   end
