@@ -1,17 +1,17 @@
-﻿
-# app/models/dispute.rb
-class Dispute < ApplicationRecord
+﻿class Dispute < ApplicationRecord
   belongs_to :order
-  belongs_to :raised_by, class_name: 'User'
-  has_many :refunds
+  belongs_to :user
+  belongs_to :admin_user, optional: true
 
-  enum :status, {
-    under_review: 'under_review',
-    resolved_buyer: 'resolved_buyer',
-    resolved_seller: 'resolved_seller',
-    escalated: 'escalated',
-    closed: 'closed'
+  validates :reason, presence: true
+  validates :status, presence: true
+
+  enum status: {
+    opened: 0,
+    under_review: 1,
+    resolved: 2,
+    closed: 3
   }
 
-  serialize :evidence_photos, type: Array
+  serialize :evidence_photos, coder: YAML
 end
