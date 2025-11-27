@@ -6,7 +6,7 @@
   validates :reason, presence: true
   validates :status, presence: true
 
-  enum status: {
+  enum :status, {
     opened: 0,
     under_review: 1,
     resolved: 2,
