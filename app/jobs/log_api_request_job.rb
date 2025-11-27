@@ -1,4 +1,4 @@
-class LogApiRequestJob < ApplicationJob
+﻿class LogApiRequestJob < ApplicationJob
   queue_as :default
 
   def perform(params)
@@ -8,9 +8,9 @@ class LogApiRequestJob < ApplicationJob
       request_header: params[:request_header],
       request_object: params[:request_object],
       response_object: params[:response_object],
-      date: Time.current,
+      logged_at: Time.current,  # Changed from 'date' to 'logged_at'
       user_id: params[:user_id],
-      date: params[:date]
+      requested_at: params[:date]  # Changed from 'date' to 'requested_at'
     )
   end
 end

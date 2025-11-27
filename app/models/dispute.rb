@@ -1,4 +1,4 @@
-
+﻿
 # app/models/dispute.rb
 class Dispute < ApplicationRecord
   belongs_to :order
@@ -13,5 +13,5 @@ class Dispute < ApplicationRecord
     closed: 'closed'
   }
 
-  serialize :evidence_photos, Array
+  serialize :evidence_photos, type: Array
 end
