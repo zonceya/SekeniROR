@@ -1,4 +1,7 @@
-class BankPaymentsController < ApplicationController
+# app/controllers/bank_payments_controller.rb
+module Api
+  module V1
+   class BankPaymentsController < ApplicationController
   before_action :authenticate_user!
 
   def create
