@@ -1,11 +1,10 @@
-module Api
+﻿module Api
   module V1
     class OrdersController < Api::V1::BaseController
       before_action :authenticate_request!
       before_action :set_order, except: [:create]
       before_action :authorize_order_access, only: [:show, :cancel, :addresses]
-      skip_before_action :verify_authenticity_token
-
+      
       # POST /orders
       def create
         Rails.logger.info "Creating order with params: #{order_params}"
