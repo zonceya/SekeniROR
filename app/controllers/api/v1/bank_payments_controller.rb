@@ -29,11 +29,11 @@ module Api
           shop: hold.item.shop,
           order_status: :pending_payment,
           payment_status: :unpaid,
-          order_items_attributes: [{
+          order_items_attributes: [ {
             item: hold.item,
             quantity: hold.quantity,
             actual_price: hold.item.price
-          }]
+          } ]
         ).tap do |order|
           hold.update!(order: order)
         end
