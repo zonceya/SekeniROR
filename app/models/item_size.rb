@@ -1,0 +1,2 @@
+class ItemSize < ApplicationRecord
+end

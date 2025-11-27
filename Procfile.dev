@@ -1,0 +1,3 @@
+web:    powershell -Command "if (Test-Path tmp/pids/server.pid) { Remove-Item tmp/pids/server.pid } ; $env:PORT='3000'; bundle exec rails s -p 3000"
+worker: bundle exec sidekiq -C config/sidekiq.yml
+

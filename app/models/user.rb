@@ -2,11 +2,54 @@ class User < ApplicationRecord
   has_one :profile, dependent: :destroy
   has_many :user_sessions, dependent: :destroy
   has_one :shop, dependent: :destroy
+  has_many :notifications, dependent: :destroy
+  has_secure_password validations: false # Disable default validations
+  has_one :digital_wallet, dependent: :destroy
+  has_many :buyer_chat_rooms, class_name: 'ChatRoom', foreign_key: 'buyer_id'
+  has_many :seller_chat_rooms, class_name: 'ChatRoom', foreign_key: 'seller_id'
+  # Password validation
+  validates :password, 
+            presence: { if: :password_required? },
+            length: { minimum: 6, allow_blank: true },
+            confirmation: { if: :password_required? }
 
   after_commit :create_shop_for_user, on: :create
   after_create :create_profile_for_user
+  before_destroy :set_logout_time
+  after_create :create_digital_wallet, unless: :digital_wallet
+  scope :admins, -> { where(role: 'admin') }
+  
+ def chat_rooms
+    ChatRoom.where('buyer_id = ? OR seller_id = ?', id, id)
+  end
+
+  # Update user without requiring password
+  def update_without_password(params)
+    if params[:password].blank?
+      update(params.except(:password, :password_confirmation))
+    else
+      update(params)
+    end
+  end
+
+  # Soft delete (makes user inactive)
+  def soft_delete
+    update(deleted: true)
+  end
+
+  def reactivate
+    update(deleted: false)
+  end
 
   private
+
+ def password_required?
+  false
+end
+
+def create_digital_wallet
+    DigitalWallet.create(user: self)
+  end
 
   def create_shop_for_user
     return if shop.present?
@@ -20,6 +63,22 @@ class User < ApplicationRecord
   end
 
   def create_profile_for_user
-    self.create_profile(profile_picture: 'default.png')  # or whatever source
+    create_profile(profile_picture: 'default.png')
+  end
+
+  def set_logout_time
+    self.ended_at = Time.current
+  end
+
+  def generate_password_reset_token
+    update(
+      reset_password_token: SecureRandom.urlsafe_base64,
+      reset_password_sent_at: Time.current
+    )
+    reset_password_token
+  end
+
+  def password_reset_expired?
+    reset_password_sent_at < 1.hour.ago
   end
 end

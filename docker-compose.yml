@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: sekeni_ror
+    volumes:
+      - ".:/app"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+      - db
+    environment:
+      - RAILS_ENV=development
+      - DATABASE_URL=postgres://postgres:123456@db:5432/Sekeni
+    command: bash -c "rm -f tmp/pids/server.pid && bin/rails server -b '0.0.0.0'"
+
+  redis:
+    image: redis:latest
+    container_name: sekeni_redis
+    ports:
+      - "6379:6379"
+
+  db:
+    image: postgres:17  # Use a specific version of PostgreSQL for stability
+    container_name: sekeni_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: Sekeni
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  pg_data:

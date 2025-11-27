@@ -1,0 +1,19 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  order: one
+  buyer: one
+  seller: one
+  pin_code: MyString
+  status: MyString
+  verified_at: 2025-11-07 23:46:52
+  expires_at: 2025-11-07 23:46:52
+
+two:
+  order: two
+  buyer: two
+  seller: two
+  pin_code: MyString
+  status: MyString
+  verified_at: 2025-11-07 23:46:52
+  expires_at: 2025-11-07 23:46:52
