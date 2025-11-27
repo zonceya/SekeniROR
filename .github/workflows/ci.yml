@@ -30,7 +30,7 @@ jobs:
           ruby-version: .ruby-version
           bundler-cache: true
       - name: Lint code for consistent style
-        run:  bundle exec rubocop --auto-correct --fail-level 
+        run:  bundle exec rubocop -a -f github 
          
 
   test:
