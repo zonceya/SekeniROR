@@ -1,4 +1,5 @@
 # app/services/gmail_reader.rb
+module Gmail
 class GmailReader
   BANK_SENDERS = {
     'absa' => 'notifications@absa.co.za',
@@ -153,4 +154,5 @@ class GmailReader
       )
     end
   end
+end
 end

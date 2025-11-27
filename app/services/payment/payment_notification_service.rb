@@ -1,4 +1,5 @@
 # app/services/payment_notification_service.rb
+module Payment
 class PaymentNotificationService
   def self.notify_payment_issues
     # Find orders with payment issues
@@ -62,4 +63,5 @@ class PaymentNotificationService
     # Email notification
     UserMailer.payment_issue(user, subject, message).deliver_later
   end
+end
 end

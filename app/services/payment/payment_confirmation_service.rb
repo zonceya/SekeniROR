@@ -1,6 +1,6 @@
-# app/services/payments/bank_transfer_confirmation_service.rb
-module Payments
-  class BankTransferConfirmationService
+# app/services/payment/payment_confirmation_service.rb
+module Payment
+  class PaymentConfirmationService
     def initialize(order)
       @order = order
     end
