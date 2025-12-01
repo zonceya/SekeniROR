@@ -10,9 +10,37 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_14_194049) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_30_021312) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "active_storage_attachments", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "record_type", null: false
+    t.bigint "record_id", null: false
+    t.bigint "blob_id", null: false
+    t.datetime "created_at", null: false
+    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id"
+    t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true
+  end
+
+  create_table "active_storage_blobs", force: :cascade do |t|
+    t.string "key", null: false
+    t.string "filename", null: false
+    t.string "content_type"
+    t.text "metadata"
+    t.string "service_name", null: false
+    t.bigint "byte_size", null: false
+    t.string "checksum"
+    t.datetime "created_at", null: false
+    t.index ["key"], name: "index_active_storage_blobs_on_key", unique: true
+  end
+
+  create_table "active_storage_variant_records", force: :cascade do |t|
+    t.bigint "blob_id", null: false
+    t.string "variation_digest", null: false
+    t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
 
   create_table "application_logs", id: false, force: :cascade do |t|
     t.string "request_type", limit: 7, null: false
@@ -391,7 +419,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_14_194049) do
 
   create_table "profiles", force: :cascade do |t|
     t.bigint "user_id", null: false
-    t.string "profile_picture"
     t.string "mobile"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -586,7 +613,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_14_194049) do
     t.string "auth_mode", limit: 50, default: "default_auth_mode", null: false
     t.boolean "status", default: true
     t.boolean "deleted", default: false
-    t.string "profile_picture", limit: 255
     t.string "role", limit: 50, default: "user"
     t.string "password_digest", limit: 255
     t.string "firebase_token"
@@ -619,6 +645,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_14_194049) do
     t.index ["transfer_request_id"], name: "index_wallet_transactions_on_transfer_request_id"
   end
 
+  add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "application_logs", "users", name: "application_log_user_id_fkey", on_delete: :nullify
   add_foreign_key "categories", "categories", column: "parent_id", name: "categories_parent_id_fkey", on_delete: :nullify
   add_foreign_key "chat_messages", "chat_rooms"

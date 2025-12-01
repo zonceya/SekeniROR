@@ -52,6 +52,8 @@ Rails.application.routes.draw do
       put 'users/reactivate', to: 'users#reactivate'
       post 'users/firebase_token', to: 'users#update_firebase_token'
       get 'users/:user_id/ratings', to: 'users#user_ratings' # ✅ Fixed: moved from orders
+      put 'users/update_profile_picture', to: 'users#update_profile_picture'
+      get 'users/profile', to: 'users#profile'
 
       # ================================
       # 🏪 Shop & item-related routes

@@ -1,63 +1,85 @@
 require 'redis'
 
 class Api::V1::UsersController < ApplicationController
-  skip_before_action :verify_authenticity_token, only: [:sign_in, :update_mobile, :disable,:reactivate,:update_firebase_token ]
+  skip_before_action :verify_authenticity_token, only: [:sign_in, :reactivate]
   before_action :authenticate_user, except: [:sign_in, :reactivate]
-   # has_many :buyer_chat_rooms, class_name: 'ChatRoom', foreign_key: 'buyer_id'
-  # has_many :seller_chat_rooms, class_name: 'ChatRoom', foreign_key: 'seller_id'
 
-  def sign_in
-    user = User.find_or_initialize_by(email: params[:email])
-    @current_user = user unless user.new_record?
-    is_new_user = user.new_record?
-  
-    # ⛔ Block sign-in if user is soft-deleted
-    if !is_new_user && user.deleted?
-      return render json: { error: "Account is deactivated. Please contact support to reactivate." }, status: :forbidden
-    end
-  
-    if is_new_user
-      user.assign_attributes(
-        name: params[:name],
-        auth_mode: params[:auth_mode] || params[:auth_Mode] || "email",
-        status: true,
-        deleted: false,
-        role: 'user'
-      )
-      unless user.save
-        Rails.logger.debug "❌ User creation failed: #{user.errors.full_messages}"
-        return render json: { error: "Unable to create user", details: user.errors.full_messages }, status: :unprocessable_entity
-      end
-      user.reload
-  
-      create_profile_for(user)
-      create_shop_for(user)
-    end
-  
-    session = create_session_for(user)
-  
-    render json: {
-      message: "Sign in successful",
-      user: user,
-      profile: user.profile,
-      shop: user.shop,
-      token: session.token
-    }, status: :ok
+def sign_in
+  user = User.find_or_initialize_by(email: params[:email])
+  is_new_user = user.new_record?
+
+  if !is_new_user && user.deleted?
+    return render json: { error: "Account is deactivated. Please contact support to reactivate." }, status: :forbidden
   end
-  
-   def chat_rooms
-    ChatRoom.where('buyer_id = ? OR seller_id = ?', id, id)
+
+  if is_new_user
+    user.assign_attributes(
+      name: params[:name],
+      auth_mode: params[:auth_mode] || params[:auth_Mode] || "email",
+      status: true,
+      deleted: false,
+      role: 'user'
+    )
+    
+    unless user.save
+      return render json: { error: "Unable to create user", details: user.errors.full_messages }, status: :unprocessable_entity
+    end
+    
+    # Upload profile picture if provided
+    if params[:profile_picture_url].present?
+      ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
+    end
+  end
+
+  session = create_session_for(user)
+
+  # Generate profile picture URL if exists
+  profile_url = nil
+  if user.profile_picture.attached?
+    profile_url = generate_profile_url(user)
+  end
+
+  render json: {
+    success: true,
+    message: "Sign in successful",
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      username: user.username,
+      profile_picture_url: profile_url,
+      auth_mode: user.auth_mode,
+      role: user.role,
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    },
+    token: session.token,
+    timestamp: Time.now.iso8601
+  }, status: :ok
+end
+
+  def chat_rooms
+    user_chat_rooms = @current_user.chat_rooms
+    render json: { chat_rooms: user_chat_rooms.as_json(except: [:created_at, :updated_at]) }, status: :ok
   end
 
   def profile
     cached_profile = redis.get("user_#{@current_user.id}_profile")
 
     if cached_profile
-      render json: { user: @current_user, profile: JSON.parse(cached_profile) }, status: :ok
+      render json: { 
+        user: user_serializer(@current_user), 
+        profile: JSON.parse(cached_profile) 
+      }, status: :ok
     else
-      render json: { user: @current_user, profile: @current_user.profile }, status: :ok
+      render json: { 
+        user: user_serializer(@current_user), 
+        profile: @current_user.profile.as_json(except: [:created_at, :updated_at])
+      }, status: :ok
     end
   end
+  
   def user_ratings
     user = User.find(params[:user_id])
     ratings = Rating.where(rated_id: user.id, rating_type: 'seller_to_buyer')
@@ -74,6 +96,7 @@ class Api::V1::UsersController < ApplicationController
       ratings: ratings.map { |r| serialize_user_rating(r) }
     }, status: :ok
   end
+  
   def update_mobile
     unless params[:mobile].present?
       return render json: { error: "Mobile number is required." }, status: :unprocessable_entity
@@ -84,8 +107,8 @@ class Api::V1::UsersController < ApplicationController
 
       render json: {
         message: "Mobile number updated successfully",
-        user: @current_user,
-        profile: @current_user.profile
+        user: user_serializer(@current_user),
+        profile: @current_user.profile.as_json(except: [:created_at, :updated_at])
       }, status: :ok
     else
       render json: {
@@ -114,44 +137,137 @@ class Api::V1::UsersController < ApplicationController
       render json: { error: "Invalid request or account not deactivated." }, status: :unprocessable_entity
     end
   end
- def update_firebase_token
-  unless params[:token].present?
-    return render json: { error: "Firebase token is required" }, status: :unprocessable_entity
-  end
+  
+  def update_firebase_token
+    unless params[:token].present?
+      return render json: { error: "Firebase token is required" }, status: :unprocessable_entity
+    end
 
-  if @current_user.update(firebase_token: params[:token])
-    render json: { 
-      message: 'Firebase token updated successfully',
-      firebase_token: @current_user.firebase_token
-    }
-  else
-    render json: { 
-      error: 'Failed to update firebase token',
-      details: @current_user.errors.full_messages 
-    }, status: :unprocessable_entity
+    if @current_user.update(firebase_token: params[:token])
+      render json: { 
+        message: 'Firebase token updated successfully',
+        firebase_token: @current_user.firebase_token
+      }
+    else
+      render json: { 
+        error: 'Failed to update firebase token',
+        details: @current_user.errors.full_messages 
+      }, status: :unprocessable_entity
+    end
+  end
+  
+
+def update_profile_picture
+  begin
+    success = if params[:profile_picture].present?
+      # Handle direct file upload
+      ImageUploadService.upload_user_profile(@current_user, params[:profile_picture])
+    elsif params[:profile_picture_url].present?
+      # Handle URL upload (from Google Sign-In)
+      ImageUploadService.upload_user_profile(@current_user, params[:profile_picture_url])
+    else
+      false
+    end
+
+    if success
+      # Clear cache
+      redis.del("user_#{@current_user.id}_profile")
+      
+      render json: {
+        message: "Profile picture updated successfully",
+        profile_picture_url: @current_user.profile_image_url
+      }, status: :ok
+    else
+      render json: {
+        error: "Failed to update profile picture"
+      }, status: :unprocessable_entity
+    end
+    
+  rescue => e
+    render json: { error: e.message }, status: :unprocessable_entity
   end
 end
+
   private
+    def simple_upload(user, image_url)
+    require 'down'
+    
+    begin
+      Rails.logger.info "Simple upload for user #{user.id}"
+      
+      # Download file
+      tempfile = Down.download(image_url)
+      Rails.logger.info "Downloaded: #{tempfile.original_filename}, #{tempfile.size} bytes"
+      
+      # Use direct attachment without create_and_upload!
+      user.profile_picture.attach(
+        io: tempfile,
+        filename: "user_#{user.id}_profile_#{Time.now.to_i}.jpg",
+        content_type: 'image/jpeg'
+      )
+      
+      if user.profile_picture.attached?
+        Rails.logger.info "✅ Simple upload successful! File key: #{user.profile_picture.key}"
+        
+        # Check if file actually exists in R2
+        sleep 1 # Give it a moment to upload
+        exists = user.profile_picture.service.exist?(user.profile_picture.key)
+        Rails.logger.info "File exists in R2: #{exists}"
+        
+        return true
+      else
+        Rails.logger.error "❌ Simple upload failed"
+        return false
+      end
+      
+      tempfile.close
+    rescue => e
+      Rails.logger.error "❌ Upload error: #{e.message}"
+      return false
+    end
+  end
+  def attempt_profile_picture_upload(user, image_url)
+    return unless image_url.present?
+    
+    # Use a background job or async approach
+    Thread.new do
+      begin
+        blob = ImageUploadService.upload_from_url(image_url, "user_#{user.id}_profile")
+        user.profile_picture.attach(blob) if blob
+      rescue => e
+        Rails.logger.warn "Profile picture upload failed: #{e.message}"
+      ensure
+        ActiveRecord::Base.connection.close
+      end
+    end
+  end
+  
   def redis
     @redis ||= Redis.new(url: ENV['REDIS_URL'] || 'redis://localhost:6379')
   end
-  def create_profile_for(user)
-    user.create_profile(image: params[:profileUrl] || "default.png") unless user.profile
+  
+  def upload_profile_picture(user, image_url)
+    blob = ImageUploadService.upload_from_url(
+      image_url, 
+      "user_#{user.id}_profile"
+    )
+    user.profile_picture.attach(blob) if blob
   end
 
-  def create_shop_for(user)
-  return if user.shop
-  
-  shop = user.build_shop(
-    name: "#{user.name}'s Shop",
-    description: "Shop for #{user.name}"
-  )
-  
-  unless shop.save
-    Rails.logger.error "Failed to create shop: #{shop.errors.full_messages}"
-    # Don't raise error here to avoid breaking user creation
+  def user_serializer(user)
+    {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      username: user.username,
+      profile_picture_url: user.profile_image_url,
+      auth_mode: user.auth_mode,
+      role: user.role,
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    }
   end
-end
 
   def create_session_for(user)
     user.user_sessions.destroy_all
@@ -164,10 +280,6 @@ end
     redis.set("user_#{user.id}_profile", user.profile.to_json)
     redis.set("user_#{user.id}_session", session.token)
     Rails.logger.debug "📦 Redis cache updated"
-  end
-
-  def redis
-    @redis ||= Redis.new(host: 'localhost', port: 6379)
   end
 
   def authenticate_user
@@ -184,7 +296,27 @@ end
       render json: { error: "Unauthorized" }, status: :unauthorized
     end
   end
-    def serialize_user_rating(rating)
+  def generate_profile_url(user)
+  s3_client = Aws::S3::Client.new(
+    access_key_id: ENV['R2_ACCESS_KEY_ID'],
+    secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
+    endpoint: ENV['R2_ENDPOINT'],
+    region: 'auto',
+    force_path_style: true
+  )
+  
+  signer = Aws::S3::Presigner.new(client: s3_client)
+  signer.presigned_url(
+    :get_object,
+    bucket: ENV['R2_BUCKET_NAME'],
+    key: user.profile_picture.key,
+    expires_in: 3600
+  )
+rescue => e
+  Rails.logger.error "Failed to generate profile URL: #{e.message}"
+  nil
+end
+  def serialize_user_rating(rating)
     {
       id: rating.id,
       rating: rating.rating,
