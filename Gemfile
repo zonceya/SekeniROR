@@ -52,3 +52,6 @@ gem "fiddle" # to silence Ruby 3.5 warning about fiddle
 # Gemfile
 gem 'fcm'
 gem "dotenv-rails", "~> 3.1"
+# Gemfile
+gem 'aws-sdk-s3', '~> 1.0'
+gem 'down', '~> 5.0'
