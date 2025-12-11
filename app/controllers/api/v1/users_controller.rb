@@ -112,6 +112,46 @@ end
     return render json: { error: "Mobile number is required." }, status: :unprocessable_entity
   end
 
+  Rails.logger.info "📱 Updating mobile for user #{@current_user.id}"
+  
+  # Start transaction to update both user and profile
+  User.transaction do
+    if @current_user.update(mobile: params[:mobile])
+      # Also update the profile's mobile
+      if @current_user.profile.update(mobile: params[:mobile])
+        Rails.logger.info "✅ Mobile updated successfully for user #{@current_user.id}"
+        
+        # Update Redis cache with updated profile
+        Rails.logger.info "📦 Caching updated profile in Redis..."
+        redis.setex("user_#{@current_user.id}_profile", 1.hour, @current_user.profile.reload.to_json)
+        
+        # Verify cache
+        cached = redis.get("user_#{@current_user.id}_profile")
+        
+        render json: {
+          message: "Mobile number updated successfully",
+          user: user_serializer(@current_user),
+          profile: @current_user.profile.as_json(except: [:created_at, :updated_at]),
+          cache_updated: cached.present?
+        }, status: :ok
+      else
+        Rails.logger.error "❌ Failed to update profile mobile"
+        raise ActiveRecord::Rollback
+      end
+    else
+      render json: {
+        message: "Failed to update user mobile number",
+        errors: @current_user.errors.full_messages
+      }, status: :unprocessable_entity
+    end
+  end
+rescue => e
+  render json: {
+    message: "Failed to update mobile number",
+    error: e.message
+  }, status: :unprocessable_entity
+end
+
   # Update both user and profile
   @current_user.update(mobile: params[:mobile])
   @current_user.profile.update(mobile: params[:mobile]) if @current_user.profile
