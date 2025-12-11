@@ -42,7 +42,8 @@ Rails.application.configure do
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
-  config.hosts << /[a-z0-9\-]+\.ngrok\-free\.app/
+  config.hosts << "api.sekeni.xyz"
+   #config.hosts << /[a-z0-9\-]+\.ngrok\-free\.app/
   config.force_ssl = false 
    # to start cloudfare -- cloudflared tunnel run sekeni-tunnel
 

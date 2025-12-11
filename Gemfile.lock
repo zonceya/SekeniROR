@@ -241,6 +241,8 @@ GEM
       net-smtp
     marcel (1.0.4)
     matrix (0.4.2)
+    mini_magick (5.3.1)
+      logger
     mini_mime (1.1.5)
     minitest (5.25.4)
     msgpack (1.8.0)
@@ -491,6 +493,7 @@ DEPENDENCIES
   jwt
   kamal
   kaminari
+  mini_magick
   pg (>= 1.6.2)
   propshaft
   puma (>= 5.0)

@@ -1,7 +1,7 @@
 require 'redis'
 
 class Api::V1::UsersController < ApplicationController
-  skip_before_action :verify_authenticity_token, only: [:sign_in, :reactivate]
+  skip_before_action :verify_authenticity_token, only: [:sign_in, :reactivate,:update_mobile]
   before_action :authenticate_user, except: [:sign_in, :reactivate]
 
 def sign_in
@@ -26,8 +26,18 @@ def sign_in
     end
     
     # Upload profile picture if provided
+  # Upload profile picture if provided
     if params[:profile_picture_url].present?
-      ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
+      upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
+      unless upload_result[:success]
+        Rails.logger.error "Failed to upload profile picture for new user #{user.id}: #{upload_result[:error]}"
+      end
+    end
+  elsif params[:profile_picture_url].present? && !user.profile_picture.attached?
+    # Existing user without profile picture - try to upload
+    upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
+    unless upload_result[:success]
+      Rails.logger.warn "Failed to upload profile picture for existing user #{user.id}: #{upload_result[:error]}"
     end
   end
 
@@ -97,26 +107,64 @@ end
     }, status: :ok
   end
   
-  def update_mobile
-    unless params[:mobile].present?
-      return render json: { error: "Mobile number is required." }, status: :unprocessable_entity
-    end
-
-    if @current_user.update(mobile: params[:mobile])
-      redis.setex("user_#{@current_user.id}_profile", 1.hour, @current_user.profile.to_json)
-
-      render json: {
-        message: "Mobile number updated successfully",
-        user: user_serializer(@current_user),
-        profile: @current_user.profile.as_json(except: [:created_at, :updated_at])
-      }, status: :ok
-    else
-      render json: {
-        message: "Failed to update user mobile number",
-        errors: @current_user.errors.full_messages
-      }, status: :unprocessable_entity
-    end
+ def update_mobile
+  unless params[:mobile].present?
+    return render json: { error: "Mobile number is required." }, status: :unprocessable_entity
   end
+
+  # Update both user and profile
+  @current_user.update(mobile: params[:mobile])
+  @current_user.profile.update(mobile: params[:mobile]) if @current_user.profile
+
+  if @current_user.valid?
+    # Cache the updated profile
+    redis.setex("user_#{@current_user.id}_profile", 1.hour, @current_user.profile.to_json)
+    
+    render json: {
+      message: "Mobile number updated successfully",
+      user: user_serializer(@current_user),  # This should include the mobile
+      profile: @current_user.profile.as_json(except: [:created_at, :updated_at]),
+      cache_updated: true
+    }, status: :ok
+  else
+    render json: {
+      message: "Failed to update user mobile number",
+      errors: @current_user.errors.full_messages
+    }, status: :unprocessable_entity
+  end
+end
+
+  # Add Redis logging
+  Rails.logger.info "📱 Updating mobile for user #{@current_user.id}"
+  
+  if @current_user.update(mobile: params[:mobile])
+    Rails.logger.info "✅ Mobile updated successfully for user #{@current_user.id}"
+    Rails.logger.info "📦 Caching updated profile in Redis..."
+    
+    # Cache the updated profile
+    redis.setex("user_#{@current_user.id}_profile", 1.hour, @current_user.profile.to_json)
+    
+    # Verify it was cached
+    cached = redis.get("user_#{@current_user.id}_profile")
+    if cached
+      Rails.logger.info "✅ Redis cache updated successfully for user #{@current_user.id}"
+    else
+      Rails.logger.error "❌ Failed to update Redis cache for user #{@current_user.id}"
+    end
+
+    render json: {
+      message: "Mobile number updated successfully",
+      user: user_serializer(@current_user),
+      profile: @current_user.profile.as_json(except: [:created_at, :updated_at]),
+      cache_updated: cached.present?
+    }, status: :ok
+  else
+    render json: {
+      message: "Failed to update user mobile number",
+      errors: @current_user.errors.full_messages
+    }, status: :unprocessable_entity
+  end
+end
 
   def disable
     Rails.logger.debug "Disabling user with ID #{@current_user.id}"
@@ -159,27 +207,34 @@ end
 
 def update_profile_picture
   begin
-    success = if params[:profile_picture].present?
+    upload_result = nil
+    
+    if params[:profile_picture].present?
       # Handle direct file upload
-      ImageUploadService.upload_user_profile(@current_user, params[:profile_picture])
+      upload_result = ImageUploadService.upload_user_profile(@current_user, params[:profile_picture])
     elsif params[:profile_picture_url].present?
       # Handle URL upload (from Google Sign-In)
-      ImageUploadService.upload_user_profile(@current_user, params[:profile_picture_url])
+      upload_result = ImageUploadService.upload_user_profile(@current_user, params[:profile_picture_url])
     else
-      false
+      return render json: {
+        error: "No profile picture provided"
+      }, status: :unprocessable_entity
     end
 
-    if success
+    if upload_result[:success]
       # Clear cache
       redis.del("user_#{@current_user.id}_profile")
       
+      # Generate new URL
+      profile_url = @current_user.profile_picture.attached? ? generate_profile_url(@current_user) : nil
+      
       render json: {
         message: "Profile picture updated successfully",
-        profile_picture_url: @current_user.profile_image_url
+        profile_picture_url: profile_url
       }, status: :ok
     else
       render json: {
-        error: "Failed to update profile picture"
+        error: "Failed to update profile picture: #{upload_result[:error]}"
       }, status: :unprocessable_entity
     end
     
@@ -255,19 +310,19 @@ end
   end
 
   def user_serializer(user)
-    {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      mobile: user.mobile,
-      username: user.username,
-      profile_picture_url: user.profile_image_url,
-      auth_mode: user.auth_mode,
-      role: user.role,
-      created_at: user.created_at,
-      updated_at: user.updated_at
-    }
-  end
+  {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    mobile: user.mobile,
+    username: user.username,
+    profile_picture_url: generate_profile_url(user),  # Use cached version
+    auth_mode: user.auth_mode,
+    role: user.role,
+    created_at: user.created_at,
+    updated_at: user.updated_at
+  }
+end
 
   def create_session_for(user)
     user.user_sessions.destroy_all
