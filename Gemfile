@@ -55,3 +55,4 @@ gem "dotenv-rails", "~> 3.1"
 # Gemfile
 gem 'aws-sdk-s3', '~> 1.0'
 gem 'down', '~> 5.0'
+gem 'mini_magick'
