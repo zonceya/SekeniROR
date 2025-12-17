@@ -58,7 +58,10 @@ Rails.application.routes.draw do
       # ================================
       # 🏪 Shop & item-related routes
       # ================================
-      resource :shop, only: [:show]
+      resource :shop, only: [:show, :update]  # Added :update
+      get 'shops/:id', to: 'shops#public_show', as: :public_shop  # Added
+      get 'shops/:id/items', to: 'shops#items'  # Added
+
       resources :item_types, only: [:index]
       resources :brands, only: [:index]
       resources :item_sizes, only: [:index]
@@ -70,7 +73,6 @@ Rails.application.routes.draw do
       resources :categories, only: [:index]
       resources :tags, only: [:index]
       resources :item_tags, only: [:index]
-
       # ================================
       # 📦 Custom item routes
       # ================================

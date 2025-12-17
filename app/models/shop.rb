@@ -1,16 +1,15 @@
+# app/models/shop.rb
 class Shop < ApplicationRecord
   belongs_to :user
-  has_one_attached :logo  # Active Storage for shop logos
-  
-  validates :name, presence: true
   has_many :items
   has_many :orders
   
-  def logo_url
-    if logo.attached?
-      Rails.application.routes.url_helpers.url_for(logo)
-    else
-      "https://cdn.skoolswap.co.za/default_shop_logo.png"
-    end
+  validates :name, presence: true
+  
+  # Remove logo_url method completely
+  # The frontend will use user.profile_picture_url from login response
+  
+  def public_name
+    display_name.presence || name
   end
 end
