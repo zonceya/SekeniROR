@@ -1,3 +1,4 @@
+# app/services/image_upload_service.rb
 require 'aws-sdk-s3'
 require 'down'
 require 'digest'
@@ -10,26 +11,32 @@ class ImageUploadService
   # Cache key prefix
   CACHE_PREFIX = 'image_upload'
 
-  # Main method for uploading user profile pictures with deduplication
-  def self.upload_user_profile(user, image_source)
+  # Generic method for uploading images to any model
+  def self.upload_for_record(record:, image_source:, attachment_name: :images, purpose: nil)
     begin
-      Rails.logger.info "🔄 Uploading profile picture for user #{user.id}"
+      Rails.logger.info "🔄 Uploading image for #{record.class.name} #{record.id} to attachment #{attachment_name}"
 
       # 1. Download or read the file
       file, is_downloaded = prepare_file(image_source)
 
-      # 2. Generate the unique fingerprint (checksum) of the file's content
+      # 2. Generate the unique fingerprint (checksum)
       file_checksum = Digest::SHA256.file(file.path).hexdigest
       Rails.logger.info "📊 File checksum: #{file_checksum}"
 
-      # 3. Create the definitive storage key using the checksum
+      # 3. Create storage key based on model, purpose, and checksum
       file_extension = File.extname(file.original_filename) || '.jpg'
-      r2_object_key = "users/profile_pictures/#{file_checksum}#{file_extension}"
+      
+      # Determine folder structure
+      folder = case record.class.name
+               when 'User' then 'users/profile_pictures'
+               when 'Item' then purpose || 'items/images'
+               else "#{record.class.name.downcase.pluralize}/#{purpose || 'images'}"
+               end
+      
+      r2_object_key = "#{folder}/#{file_checksum}#{file_extension}"
 
       # 4. Check cache first for blob existence
       cache_key = "#{CACHE_PREFIX}/blob_exists/#{r2_object_key}"
-
-      # Check if blob exists in cache
       cached_blob_exists = Rails.cache.read(cache_key)
 
       if cached_blob_exists
@@ -40,7 +47,6 @@ class ImageUploadService
         s3_client = get_s3_client
 
         begin
-          # This is a fast, lightweight check (HEAD request)
           s3_client.head_object(bucket: ENV['R2_BUCKET_NAME'], key: r2_object_key)
           file_exists = true
           Rails.logger.info "✅ File already exists in R2 at key: #{r2_object_key}"
@@ -64,8 +70,10 @@ class ImageUploadService
           content_type: file.content_type || 'image/jpeg',
           metadata: {
             'uploaded_at' => Time.current.iso8601,
-            'uploaded_by_user_id' => user.id.to_s,
-            'checksum' => file_checksum
+            'uploaded_for_id' => record.id.to_s,
+            'uploaded_for_type' => record.class.name,
+            'checksum' => file_checksum,
+            'purpose' => purpose.to_s
           }
         )
         Rails.logger.info "✅ New file uploaded successfully."
@@ -75,36 +83,43 @@ class ImageUploadService
       end
 
       # 6. Create or find the ActiveStorage Blob
-      blob = find_or_create_blob(r2_object_key, file, file_checksum, user.id)
+      blob = find_or_create_blob(r2_object_key, file, file_checksum, record)
 
       return { success: false, error: "Failed to create blob" } unless blob
 
-      # 7. Check if user already has this exact image attached
-      current_attachment = user.profile_picture.attachment
-      needs_update = true
-
-      if current_attachment && current_attachment.blob_id == blob.id
-        Rails.logger.info "⚠️ User already has this exact image. No change needed."
-        needs_update = false
+      # 7. Attach the blob to the record
+      if record.send(attachment_name).respond_to?(:attach)
+        # For single attachment (has_one_attached)
+        record.send(attachment_name).attach(blob)
+      else
+        # For multiple attachments (has_many_attached)
+        record.send(attachment_name).attach(blob) unless record.send(attachment_name).include?(blob)
       end
 
-      # 8. Only update if needed
-      if needs_update
-        user.profile_picture.purge if user.profile_picture.attached?
-        user.profile_picture.attach(blob)
+      # 8. Check if attachment was successful
+      attached = if record.send(attachment_name).respond_to?(:attached?)
+                   record.send(attachment_name).attached?
+                 else
+                   record.send(attachment_name).include?(blob)
+                 end
 
-        if user.profile_picture.attached?
-          Rails.logger.info "✅ Successfully attached new image to user #{user.id}."
-        else
-          Rails.logger.error "❌ Failed to attach profile picture"
-          return { success: false, error: "Failed to attach profile picture" }
-        end
-
-        # Cache the user's current profile picture key
-        cache_user_profile_key(user, r2_object_key)
+      if attached
+        Rails.logger.info "✅ Successfully attached image to #{record.class.name} #{record.id}."
+        
+        # Cache the record's image relationship
+        cache_record_image_key(record, blob.key, attachment_name)
+        
+        return { 
+          success: true, 
+          duplicate: file_exists, 
+          blob_key: r2_object_key, 
+          checksum: file_checksum,
+          blob_id: blob.id
+        }
+      else
+        Rails.logger.error "❌ Failed to attach image"
+        return { success: false, error: "Failed to attach image" }
       end
-
-      return { success: true, duplicate: !needs_update, blob_key: r2_object_key, checksum: file_checksum }
 
     rescue => e
       Rails.logger.error "❌ Upload/attachment failed: #{e.message}"
@@ -119,8 +134,38 @@ class ImageUploadService
     end
   end
 
+  # Method specifically for uploading multiple item images
+  def self.upload_item_images(item, image_sources, purposes: nil)
+    results = []
+    
+    Array(image_sources).each_with_index do |image_source, index|
+      purpose = purposes ? purposes[index] : "image_#{index + 1}"
+      
+      result = upload_for_record(
+        record: item,
+        image_source: image_source,
+        attachment_name: :images,
+        purpose: purpose
+      )
+      
+      results << result
+    end
+    
+    results
+  end
+
+  # Keep the original user method for backward compatibility
+  def self.upload_user_profile(user, image_source)
+    upload_for_record(
+      record: user,
+      image_source: image_source,
+      attachment_name: :profile_picture,
+      purpose: 'profile_picture'
+    )
+  end
+
   # Helper method to find or create blob with caching
-  def self.find_or_create_blob(key, file, checksum, user_id = nil)
+  def self.find_or_create_blob(key, file, checksum, record = nil)
     cache_key = "#{CACHE_PREFIX}/blob/#{key}"
 
     # Try to find blob in cache first
@@ -134,15 +179,23 @@ class ImageUploadService
     blob = ActiveStorage::Blob.find_by(key: key)
 
     unless blob
-      # Create a new blob record if it's the first time we've seen this key
-      filename = user_id ? "user_#{user_id}_profile#{File.extname(file.original_filename) || '.jpg'}" : file.original_filename
+      # Create a new blob record
+      filename = if record
+                   "#{record.class.name.downcase}_#{record.id}_#{Time.now.to_i}#{File.extname(file.original_filename) || '.jpg'}"
+                 else
+                   file.original_filename
+                 end
 
       # Prepare metadata
       metadata = {
         'checksum' => checksum,
         'uploaded_at' => Time.current.iso8601
       }
-      metadata['uploaded_by_user_id'] = user_id.to_s if user_id
+      
+      if record
+        metadata['uploaded_for_id'] = record.id.to_s
+        metadata['uploaded_for_type'] = record.class.name
+      end
 
       blob = ActiveStorage::Blob.new(
         key: key,
@@ -184,20 +237,22 @@ class ImageUploadService
     }, expires_in: CACHE_DURATION)
   end
 
-  # Cache user's current profile picture key
-  def self.cache_user_profile_key(user, key)
-    cache_key = "#{CACHE_PREFIX}/user_profile/#{user.id}"
-    Rails.cache.write(cache_key, {
-      blob_key: key,
-      updated_at: Time.current.iso8601
-    }, expires_in: CACHE_DURATION)
+  # Cache record's image key
+  def self.cache_record_image_key(record, key, attachment_name)
+    cache_key = "#{CACHE_PREFIX}/#{record.class.name.downcase}_#{attachment_name}/#{record.id}"
+    
+    cached_data = Rails.cache.read(cache_key) || { blob_keys: [] }
+    cached_data[:blob_keys] << key unless cached_data[:blob_keys].include?(key)
+    cached_data[:updated_at] = Time.current.iso8601
+    
+    Rails.cache.write(cache_key, cached_data, expires_in: CACHE_DURATION)
   end
 
-  # Get cached user profile key
-  def self.get_cached_user_profile_key(user)
-    cache_key = "#{CACHE_PREFIX}/user_profile/#{user.id}"
+  # Get cached image keys for a record
+  def self.get_cached_image_keys(record, attachment_name)
+    cache_key = "#{CACHE_PREFIX}/#{record.class.name.downcase}_#{attachment_name}/#{record.id}"
     cached = Rails.cache.read(cache_key)
-    cached[:blob_key] if cached
+    cached[:blob_keys] if cached
   end
 
   # Clear cache for a specific blob
@@ -206,9 +261,9 @@ class ImageUploadService
     Rails.cache.delete("#{CACHE_PREFIX}/blob/#{key}")
   end
 
-  # Clear cache for a user's profile
-  def self.clear_user_profile_cache(user)
-    Rails.cache.delete("#{CACHE_PREFIX}/user_profile/#{user.id}")
+  # Clear cache for a record's images
+  def self.clear_record_image_cache(record, attachment_name)
+    Rails.cache.delete("#{CACHE_PREFIX}/#{record.class.name.downcase}_#{attachment_name}/#{record.id}")
   end
 
   # Get S3 client (memoized)
@@ -222,70 +277,22 @@ class ImageUploadService
     )
   end
 
-  # Optional: Keep this method for general uploads if needed
-  def self.upload_from_url(image_url, filename)
-    return nil unless image_url.present?
-
-    begin
-      Rails.logger.info "🔄 Direct R2 upload from URL: #{image_url}"
-
-      # Download image
-      tempfile = Down.download(
-        image_url,
-        headers: {
-          'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept' => 'image/*'
-        }
-      )
-
-      # Generate checksum
-      checksum = Digest::SHA256.file(tempfile.path).hexdigest
-      file_extension = File.extname(tempfile.original_filename) || '.jpg'
-      r2_key = "uploads/#{filename}_#{checksum}#{file_extension}"
-
-      # Upload to R2
-      s3_client = get_s3_client
-
-      # Check cache first
-      cache_key = "#{CACHE_PREFIX}/blob_exists/#{r2_key}"
-      cached_exists = Rails.cache.read(cache_key)
-
-      unless cached_exists
-        s3_client.put_object(
-          bucket: ENV['R2_BUCKET_NAME'],
-          key: r2_key,
-          body: tempfile,
-          content_type: tempfile.content_type || 'image/jpeg',
-          metadata: {
-            'uploaded_at' => Time.current.iso8601,
-            'checksum' => checksum
-          }
-        )
-
-        # Cache the result
-        Rails.cache.write(cache_key, true, expires_in: CACHE_DURATION)
-      end
-
-      # Create blob using helper
-      blob = find_or_create_blob(r2_key, tempfile, checksum)
-
-      blob ? blob : nil
-
-    rescue => e
-      Rails.logger.error "❌ Upload error: #{e.message}"
-      nil
-    ensure
-      tempfile&.close
-      tempfile&.unlink
-    end
-  end
-
   private
 
   def self.prepare_file(image_source)
-    if image_source.respond_to?(:path)
+    if image_source.respond_to?(:path) && image_source.respond_to?(:original_filename)
+      # Already a file upload object
+      return image_source, false
+    elsif image_source.respond_to?(:path)
+      # Tempfile from download
+      class << image_source
+        attr_accessor :original_filename
+      end
+      image_source.original_filename ||= 'image.jpg'
+      image_source.content_type ||= 'image/jpeg'
       return image_source, false
     else
+      # URL - need to download
       require 'net/http'
       require 'uri'
 

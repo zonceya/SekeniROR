@@ -21,19 +21,56 @@ Rails.application.routes.draw do
       # Categories
       get '/categories', to: 'categories#index'
       get '/categories/:id/items', to: 'categories#items'
-      get '/items', to: 'items#index' 
+      
       # Provinces & Towns for filtering
       get '/provinces', to: 'provinces#index'
       get '/towns', to: 'towns#index'
-    
-      # Existing routes
-      resources :items, only: [:index, :show, :create, :update, :destroy] do
+      
+      # ================================
+      # 🏪 SHOP ROUTES
+      # ================================
+      resource :shop, only: [:show, :update]  # Current user's shop
+      get 'shops/:id', to: 'shops#public_show', as: :public_shop  # Public shop view
+      get 'shops/:id/items', to: 'shops#items'  # Public shop items
+      
+      # ================================
+      # 🛒 ITEM ROUTES (PUBLIC & PRIVATE)
+      # ================================
+      # Public item browsing
+      get '/items', to: 'items#index'  # All active items (public)
+      
+      resources :items, only: [] do
+        collection do
+          # 🛒 Public routes
+          get :shop_items  # GET /api/v1/items/shop_items?shop_id=:shop_id
+          
+          # 🔐 Private routes (shop owner)
+          get :my_shop_items  # GET /api/v1/items/my_shop_items (authenticated user's shop items)
+          post :createItems   # POST /api/v1/items/createItems (create item in user's shop)
+          get :viewAllShopItems  # GET /api/v1/items/viewAllShopItems (admin/all items)
+        end
+        
         member do
-          post :mark_as_sold
-          post :reserve_item
+          # 🛒 Public routes
+          get :viewShopItem  # GET /api/v1/items/:id/viewShopItem
+          post :reserve_item # POST /api/v1/items/:id/reserve_item
+          post 'images', to: 'items#add_images', on: :member
+          delete 'images/:image_id', to: 'items#remove_image', on: :member
+          # 🔐 Private routes (shop owner)
+          put :updateItem    # PUT /api/v1/items/:id/updateItem
+          delete :deleteItem # DELETE /api/v1/items/:id/deleteItem
+          patch :mark_as_sold # PATCH /api/v1/items/:id/mark_as_sold
+          post :hold         # POST /api/v1/items/:id/hold
+          delete :release    # DELETE /api/v1/items/:id/release
         end
       end
       
+      # Simple show route for public item viewing
+      get 'items/:id', to: 'items#show'  # GET /api/v1/items/:id (public item detail)
+      
+      # ================================
+      # 📋 MASTER DATA ROUTES
+      # ================================
       resources :brands, only: [:index]
       resources :categories, only: [:index]
       resources :item_types, only: [:index]
@@ -42,8 +79,12 @@ Rails.application.routes.draw do
       resources :tags, only: [:index]
       resources :item_tags, only: [:index]
       resources :banners, only: [:index, :create, :update, :destroy]
+      resources :item_conditions, only: [:index]
+      resources :item_colors, only: [:index]
+      resources :locations, only: [:index]
+      
       # ================================
-      # 👤 User routes
+      # 👤 USER ROUTES
       # ================================
       post 'users/sign_in', to: 'users#sign_in'
       get 'users/profile', to: 'users#profile'
@@ -51,48 +92,11 @@ Rails.application.routes.draw do
       post 'users/disable', to: 'users#disable'
       put 'users/reactivate', to: 'users#reactivate'
       post 'users/firebase_token', to: 'users#update_firebase_token'
-      get 'users/:user_id/ratings', to: 'users#user_ratings' # ✅ Fixed: moved from orders
+      get 'users/:user_id/ratings', to: 'users#user_ratings'
       put 'users/update_profile_picture', to: 'users#update_profile_picture'
      
-
       # ================================
-      # 🏪 Shop & item-related routes
-      # ================================
-      resource :shop, only: [:show, :update]  # Added :update
-      get 'shops/:id', to: 'shops#public_show', as: :public_shop  # Added
-      get 'shops/:id/items', to: 'shops#items'  # Added
-
-      resources :item_types, only: [:index]
-      resources :brands, only: [:index]
-      resources :item_sizes, only: [:index]
-      resources :item_conditions, only: [:index]
-      resources :item_colors, only: [:index]
-      resources :provinces, only: [:index]
-      resources :locations, only: [:index]
-      resources :schools, only: [:index]
-      resources :categories, only: [:index]
-      resources :tags, only: [:index]
-      resources :item_tags, only: [:index]
-      # ================================
-      # 📦 Custom item routes
-      # ================================
-      resources :items, only: [] do
-        collection do
-          post :createItems
-          get :viewAllShopItems
-        end
-        member do
-          get :viewShopItem
-          put :updateItem
-          delete :deleteItem
-          patch :mark_as_sold
-          post :hold
-          delete :release
-        end
-      end
-
-      # ================================
-      # 💬 Chat routes
+      # 💬 CHAT ROUTES
       # ================================
       resources :chat_rooms, only: [:index, :show, :create] do
         resources :chat_messages, only: [:index, :create]
@@ -101,7 +105,7 @@ Rails.application.routes.draw do
       mount ActionCable.server => '/cable'
 
       # ================================
-      # 🧾 Order & Payment routes
+      # 🧾 ORDER & PAYMENT ROUTES
       # ================================
       resources :orders, only: [:create, :show] do
         member do
@@ -115,10 +119,9 @@ Rails.application.routes.draw do
           post :submit_payment_proof
           
           # ✅ REFUND ROUTES - CORRECTED
-            post 'cancel_order', to: 'refunds#cancel_order'
-            post 'dispute', to: 'refunds#dispute'
-            get 'refund_status', to: 'refunds#show'
-          
+          post 'cancel_order', to: 'refunds#cancel_order'
+          post 'dispute', to: 'refunds#dispute'
+          get 'refund_status', to: 'refunds#show'
           
           # 🔐 PIN VERIFICATION ROUTES
           post 'generate_pin', to: 'pin_verifications#generate_pin'
@@ -140,7 +143,7 @@ Rails.application.routes.draw do
       end
 
       # ================================
-      # ⭐ Rating routes
+      # ⭐ RATING ROUTES
       # ================================
       get 'shops/:shop_id/ratings', to: 'ratings#shop_ratings'
 
@@ -168,7 +171,7 @@ Rails.application.routes.draw do
       post '/bank_webhooks/payment_received', to: 'bank_webhooks#payment_received'
 
       # ================================
-      # 🔔 Notification routes
+      # 🔔 NOTIFICATION ROUTES
       # ================================
       resources :notifications, only: [:index] do
         member do
@@ -180,7 +183,7 @@ Rails.application.routes.draw do
       end
 
       # ================================
-      # 🔐 Admin routes
+      # 🔐 ADMIN ROUTES
       # ================================
       namespace :admin do
         # Authentication
@@ -207,7 +210,7 @@ Rails.application.routes.draw do
         end
      
         # ================================
-        # 🚚 Admin Order Management
+        # 🚚 ADMIN ORDER MANAGEMENT
         # ================================
         resources :orders, only: [:index, :show] do
           collection do
