@@ -1,28 +1,39 @@
+# app/controllers/api/v1/categories_controller.rb
 module Api
   module V1
     class CategoriesController < ApplicationController
-      protect_from_forgery with: :null_session
       skip_before_action :verify_authenticity_token
-
+      
+      # GET /api/v1/categories
       def index
-        categories = Category.where(parent_id: nil)
-                           .select(:id, :name, :parent_id)
-        render json: categories
-      end
-
-      def items
-        category = Category.find(params[:id])
+        categories = MainCategory.active.ordered.includes(:sub_categories)
         
-        # Get all subcategory IDs including the main category
-        category_ids = category.subcategories.pluck(:id) << category.id
-        
-        items = Item.joins(:item_type)
-                   .where(item_types: { category_id: category_ids }, 
-                          items: { deleted: false, status: 'active' })
-                   .includes(:shop, :brand)
-                   .order(created_at: :desc)
-
-        render json: items.paginate(page: params[:page], per_page: 20)
+        render json: {
+          success: true,
+          categories: categories.map { |cat|
+            {
+              id: cat.id,
+              name: cat.name,
+              
+              description: cat.description,
+              icon_name: cat.icon_name,
+              sub_categories: cat.sub_categories.active.ordered.map { |sub|
+                {
+                  id: sub.id,
+                  name: sub.name,
+                  description: sub.description
+                }
+              },
+              item_types: cat.item_types.active.map { |type|
+                {
+                  id: type.id,
+                  name: type.name,
+                  description: type.description
+                }
+              }
+            }
+          }
+        }
       end
     end
   end
