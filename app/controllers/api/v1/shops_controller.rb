@@ -58,7 +58,41 @@ module Api
           }, status: :unprocessable_entity
         end
       end
+      # app/controllers/api/v1/shops_controller.rb
+# Add this method to your ShopsController:
+
+# GET /api/v1/shops/:id/items - Public shop items
+    def items
+      shop = Shop.find_by(id: params[:id])
       
+      if shop.nil?
+        return render json: { 
+          success: false, 
+          error: "Shop not found" 
+        }, status: :not_found
+      end
+      
+      items = shop.items.where(deleted: false, status: 'active')
+      
+      # Apply filters if needed
+      if params[:sort] == 'newest'
+        items = items.order(created_at: :desc)
+      end
+      
+      render json: {
+        success: true,
+        shop: {
+          id: shop.id,
+          name: shop.public_name,
+          seller_name: shop.user.name
+        },
+        items: items.as_json(include: {
+          shop: {
+            only: [:id, :name]
+          }
+        })
+      }
+    end
       # GET /api/v1/shops/:id - Public shop view
       def public_show
         shop = Shop.find_by(id: params[:id])

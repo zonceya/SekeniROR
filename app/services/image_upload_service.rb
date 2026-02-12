@@ -135,24 +135,29 @@ class ImageUploadService
   end
 
   # Method specifically for uploading multiple item images
-  def self.upload_item_images(item, image_sources, purposes: nil)
-    results = []
+ def self.upload_item_images(item, image_sources, purposes: nil)
+  results = []
+  
+  Rails.logger.info "📤 Starting upload of #{Array(image_sources).count} images for item #{item.id}"
+  
+  Array(image_sources).each_with_index do |image_source, index|
+    purpose = purposes ? purposes[index] : "image_#{index + 1}"
     
-    Array(image_sources).each_with_index do |image_source, index|
-      purpose = purposes ? purposes[index] : "image_#{index + 1}"
-      
-      result = upload_for_record(
-        record: item,
-        image_source: image_source,
-        attachment_name: :images,
-        purpose: purpose
-      )
-      
-      results << result
-    end
+    Rails.logger.info "Processing image #{index + 1}: #{image_source.respond_to?(:original_filename) ? image_source.original_filename : 'URL'}"
     
-    results
+    result = upload_for_record(
+      record: item,
+      image_source: image_source,
+      attachment_name: :images,
+      purpose: purpose
+    )
+    
+    results << result
   end
+  
+  Rails.logger.info "✅ Completed upload: #{results.count { |r| r[:success] }} successful, #{results.count { |r| !r[:success] }} failed"
+  results
+end
 
   # Keep the original user method for backward compatibility
   def self.upload_user_profile(user, image_source)

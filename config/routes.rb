@@ -36,37 +36,30 @@ Rails.application.routes.draw do
       # ================================
       # 🛒 ITEM ROUTES (PUBLIC & PRIVATE)
       # ================================
-      # Public item browsing
-      get '/items', to: 'items#index'  # All active items (public)
-      
-      resources :items, only: [] do
+      resources :items, only: [:index, :show, :create] do
         collection do
-          # 🛒 Public routes
-          get :shop_items  # GET /api/v1/items/shop_items?shop_id=:shop_id
-          
-          # 🔐 Private routes (shop owner)
-          get :my_shop_items  # GET /api/v1/items/my_shop_items (authenticated user's shop items)
-          post :createItems   # POST /api/v1/items/createItems (create item in user's shop)
-          get :viewAllShopItems  # GET /api/v1/items/viewAllShopItems (admin/all items)
+          get :shop_items          # GET /api/v1/items/shop_items?shop_id=1
+          get :viewAllShopItems    # GET /api/v1/items/viewAllShopItems
+          post :createItems        # POST /api/v1/items/createItems
         end
         
         member do
-          # 🛒 Public routes
-          get :viewShopItem  # GET /api/v1/items/:id/viewShopItem
-          post :reserve_item # POST /api/v1/items/:id/reserve_item
-          post 'images', to: 'items#add_images', on: :member
-          delete 'images/:image_id', to: 'items#remove_image', on: :member
-          # 🔐 Private routes (shop owner)
-          put :updateItem    # PUT /api/v1/items/:id/updateItem
-          delete :deleteItem # DELETE /api/v1/items/:id/deleteItem
-          patch :mark_as_sold # PATCH /api/v1/items/:id/mark_as_sold
-          post :hold         # POST /api/v1/items/:id/hold
-          delete :release    # DELETE /api/v1/items/:id/release
+          get :viewShopItem        # GET /api/v1/items/:id/viewShopItem
+          post :reserve_item       # POST /api/v1/items/:id/reserve_item
+          put :updateItem          # PUT /api/v1/items/:id/updateItem
+          delete :deleteItem       # DELETE /api/v1/items/:id/deleteItem
+          patch :mark_as_sold      # PATCH /api/v1/items/:id/mark_as_sold
+          post :hold               # POST /api/v1/items/:id/hold
+          delete :release          # DELETE /api/v1/items/:id/release
+          
+          # Image routes
+          post 'images', to: 'items#add_images'           # POST /api/v1/items/:id/images
+          delete 'images/:image_id', to: 'items#remove_image'  # DELETE /api/v1/items/:id/images/:image_id
         end
       end
       
-      # Simple show route for public item viewing
-      get 'items/:id', to: 'items#show'  # GET /api/v1/items/:id (public item detail)
+      # Direct routes for specific endpoints
+      get 'my-shop/items', to: 'items#my_shop_items'  # GET /api/v1/my-shop/items (user's shop items)
       
       # ================================
       # 📋 MASTER DATA ROUTES
@@ -82,6 +75,8 @@ Rails.application.routes.draw do
       resources :item_conditions, only: [:index]
       resources :item_colors, only: [:index]
       resources :locations, only: [:index]
+      get 'genders', to: 'genders#index'
+      get 'locations', to: 'locations#index'
       
       # ================================
       # 👤 USER ROUTES
@@ -128,8 +123,8 @@ Rails.application.routes.draw do
           get 'pin_verification', to: 'pin_verifications#show'
           get 'seller_pin', to: 'pin_verifications#seller_pin' 
           get 'transaction_summary', to: 'pin_verifications#transaction_summary'
-          post 'resend_pin', to: 'pin_verifications#resend'
-          post 'cancel_pin', to: 'pin_verifications#cancel'
+          post 'resend_pin', to: 'pin_verifications#resend_pin'
+          post 'cancel_pin', to: 'pin_verifications#cancel_pin'
           
           # PAYMENT ROUTES
           post 'initiate_payment', to: 'payments#initiate'

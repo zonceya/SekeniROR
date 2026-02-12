@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_12_13_202400) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_10_203703) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -240,16 +240,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_13_202400) do
     t.unique_constraint ["name"], name: "item_sizes_name_key"
   end
 
-  create_table "item_stock", force: :cascade do |t|
-    t.uuid "item_variant_id"
-    t.bigint "location_id"
-    t.integer "condition_id", limit: 2
-    t.integer "quantity"
-    t.jsonb "meta"
-    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
-    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
-  end
-
   create_table "item_tags", primary_key: ["item_id", "tag_id"], force: :cascade do |t|
     t.uuid "item_id", null: false
     t.integer "tag_id", null: false
@@ -259,19 +249,32 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_13_202400) do
     t.bigint "group_id"
     t.string "name", null: false
     t.text "description"
+    t.bigint "main_category_id"
+    t.boolean "is_active", default: true
+    t.bigint "category_id"
+    t.index ["category_id"], name: "index_item_types_on_category_id"
+    t.index ["main_category_id"], name: "index_item_types_on_main_category_id"
   end
 
   create_table "item_variants", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "item_id"
-    t.string "item_type"
-    t.string "variant_name"
-    t.string "variant_value"
-    t.decimal "actual_price"
-    t.integer "stock_availability"
-    t.jsonb "meta"
-    t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
-    t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
-    t.integer "color_id", limit: 2
+    t.uuid "item_id", null: false
+    t.bigint "size_id"
+    t.bigint "color_id"
+    t.bigint "condition_id"
+    t.string "sku"
+    t.decimal "price", precision: 10, scale: 2
+    t.integer "quantity", default: 0
+    t.integer "reserved", default: 0
+    t.boolean "is_active", default: true
+    t.jsonb "metadata", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["color_id"], name: "index_item_variants_on_color_id"
+    t.index ["condition_id"], name: "index_item_variants_on_condition_id"
+    t.index ["item_id", "size_id", "color_id", "condition_id"], name: "idx_item_variant_unique", unique: true
+    t.index ["item_id"], name: "index_item_variants_on_item_id"
+    t.index ["size_id"], name: "index_item_variants_on_size_id"
+    t.index ["sku"], name: "index_item_variants_on_sku", unique: true
   end
 
   create_table "items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -288,18 +291,23 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_13_202400) do
     t.bigint "item_type_id"
     t.integer "school_id"
     t.integer "brand_id"
-    t.integer "size_id"
     t.string "additional_photo"
     t.string "label"
     t.decimal "price"
-    t.integer "quantity", default: 0, null: false
-    t.bigint "item_condition_id"
     t.bigint "location_id"
     t.bigint "province_id"
     t.string "label_photo"
     t.integer "gender_id"
-    t.integer "reserved", default: 0, null: false
+    t.bigint "main_category_id"
+    t.bigint "sub_category_id"
+    t.integer "total_quantity", default: 0
+    t.integer "total_reserved", default: 0
+    t.decimal "min_price", precision: 10, scale: 2
+    t.decimal "max_price", precision: 10, scale: 2
+    t.integer "available_variants_count", default: 0
     t.index ["id"], name: "idx_items_category"
+    t.index ["main_category_id"], name: "index_items_on_main_category_id"
+    t.index ["sub_category_id"], name: "index_items_on_sub_category_id"
   end
 
   create_table "locations", force: :cascade do |t|
@@ -307,6 +315,16 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_13_202400) do
     t.string "state_or_region"
     t.string "country", default: "South Africa"
     t.integer "town_id"
+  end
+
+  create_table "main_categories", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "description"
+    t.string "icon_name"
+    t.integer "display_order", default: 0
+    t.boolean "is_active", default: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "my_store_purchases", force: :cascade do |t|
@@ -540,6 +558,31 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_13_202400) do
     t.string "display_name"
   end
 
+  create_table "stock_movements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "item_variant_id", null: false
+    t.integer "quantity_change", null: false
+    t.string "movement_type"
+    t.string "reference_type"
+    t.uuid "reference_id"
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item_variant_id"], name: "index_stock_movements_on_item_variant_id"
+    t.index ["movement_type"], name: "index_stock_movements_on_movement_type"
+    t.index ["reference_type", "reference_id"], name: "index_stock_movements_on_reference_type_and_reference_id"
+  end
+
+  create_table "sub_categories", force: :cascade do |t|
+    t.bigint "main_category_id", null: false
+    t.string "name", null: false
+    t.string "description"
+    t.integer "display_order", default: 0
+    t.boolean "is_active", default: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["main_category_id"], name: "index_sub_categories_on_main_category_id"
+  end
+
   create_table "tags", id: :serial, force: :cascade do |t|
     t.string "name", null: false
     t.string "tag_type"
@@ -663,24 +706,24 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_13_202400) do
   add_foreign_key "holds", "items"
   add_foreign_key "holds", "orders"
   add_foreign_key "holds", "users"
-  add_foreign_key "item_stock", "item_conditions", column: "condition_id", name: "item_stock_condition_id_fkey"
-  add_foreign_key "item_stock", "item_variants", name: "item_stock_item_variant_id_fkey"
-  add_foreign_key "item_stock", "locations", name: "item_stock_location_id_fkey"
   add_foreign_key "item_tags", "items", name: "item_tags_item_id_fkey", on_delete: :cascade
   add_foreign_key "item_tags", "tags", name: "item_tags_tag_id_fkey", on_delete: :cascade
+  add_foreign_key "item_types", "categories"
   add_foreign_key "item_types", "item_groups", column: "group_id", name: "item_types_group_id_fkey", on_delete: :nullify
-  add_foreign_key "item_variants", "item_colors", column: "color_id", name: "item_variants_color_id_fkey"
-  add_foreign_key "item_variants", "items", name: "item_variants_item_id_fkey"
+  add_foreign_key "item_types", "main_categories"
+  add_foreign_key "item_variants", "item_colors", column: "color_id"
+  add_foreign_key "item_variants", "item_conditions", column: "condition_id"
+  add_foreign_key "item_variants", "item_sizes", column: "size_id"
+  add_foreign_key "item_variants", "items"
   add_foreign_key "items", "brands", name: "items_brand_id_fkey"
-  add_foreign_key "items", "item_conditions", name: "items_item_condition_id_fkey", on_delete: :nullify
-  add_foreign_key "items", "item_sizes", column: "size_id", name: "items_size_id_fkey"
   add_foreign_key "items", "item_types", name: "items_item_type_id_fkey", on_delete: :nullify
   add_foreign_key "items", "locations", name: "items_location_id_fkey", on_delete: :nullify
+  add_foreign_key "items", "main_categories"
   add_foreign_key "items", "provinces", name: "items_province_id_fkey", on_delete: :nullify
   add_foreign_key "items", "schools", name: "items_school_id_fkey"
+  add_foreign_key "items", "sub_categories"
   add_foreign_key "locations", "towns", name: "locations_town_id_fkey", on_delete: :nullify
   add_foreign_key "notifications", "users"
-  add_foreign_key "order_items", "item_variants", name: "order_items_item_variant_id_fkey"
   add_foreign_key "order_items", "items", name: "order_items_item_id_fkey"
   add_foreign_key "order_items", "orders", name: "order_items_order_id_fkey"
   add_foreign_key "order_transactions", "orders"
@@ -706,6 +749,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_13_202400) do
   add_foreign_key "seller_strikes", "users", column: "seller_id"
   add_foreign_key "shop_ratings", "shops", name: "shop_ratings_shop_id_fkey", on_delete: :cascade
   add_foreign_key "shops", "users", name: "shops_user_id_fkey"
+  add_foreign_key "stock_movements", "item_variants"
+  add_foreign_key "sub_categories", "main_categories"
   add_foreign_key "towns", "provinces", name: "towns_province_id_fkey", on_delete: :nullify
   add_foreign_key "transactions", "orders", name: "transactions_order_id_fk", on_delete: :cascade
   add_foreign_key "user_ratings", "users", name: "user_ratings_user_id_fkey", on_delete: :cascade
