@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_10_203703) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_10_223814) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -480,7 +480,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_10_203703) do
     t.timestamptz "updated_at", default: -> { "now()" }
     t.index ["order_id", "rater_id", "rating_type"], name: "unique_rating_per_order_and_type", unique: true
     t.check_constraint "rating >= 1 AND rating <= 5", name: "ratings_rating_check"
-    t.check_constraint "rating_type::text = ANY (ARRAY['buyer_to_seller'::character varying, 'seller_to_buyer'::character varying]::text[])", name: "ratings_rating_type_check"
+    t.check_constraint "rating_type::text = ANY (ARRAY['buyer_to_seller'::character varying::text, 'seller_to_buyer'::character varying::text])", name: "ratings_rating_type_check"
   end
 
   create_table "refunds", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
