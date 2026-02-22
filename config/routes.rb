@@ -66,6 +66,12 @@ Rails.application.routes.draw do
       # ================================
       resources :brands, only: [:index]
       resources :categories, only: [:index]
+     resources :main_categories, only: [:index] do
+      member do
+        get :sub_categories  # This creates /api/v1/main_categories/:id/sub_categories
+      end
+    end
+    resources :sub_categories, only: [:index]  # Ke
       resources :item_types, only: [:index]
       resources :item_sizes, only: [:index]
       resources :schools, only: [:index]
@@ -77,7 +83,9 @@ Rails.application.routes.draw do
       resources :locations, only: [:index]
       get 'genders', to: 'genders#index'
       get 'locations', to: 'locations#index'
-      
+      get 'all_reference_data', to: 'reference_data#index'  # Add this line
+      resources :brands, only: [:index]
+      resources :categories, only: [:index]
       # ================================
       # 👤 USER ROUTES
       # ================================

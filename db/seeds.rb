@@ -27,11 +27,11 @@ towns = Town.create!([
 
 puts "3. Creating locations..."
 locations = Location.create!([
-  {province: "Gauteng", town_id: towns[0].id},
-  {province: "Gauteng", town_id: towns[1].id},
-  {province: "Western Cape", town_id: towns[2].id},
-  {province: "KwaZulu-Natal", town_id: towns[3].id},
-  {province: "Free State", town_id: towns[4].id}
+  {province: "Gauteng", state_or_region: "Johannesburg", country: "South Africa", town_id: towns[0].id},
+  {province: "Gauteng", state_or_region: "Pretoria", country: "South Africa", town_id: towns[1].id},
+  {province: "Western Cape", state_or_region: "Cape Town", country: "South Africa", town_id: towns[2].id},
+  {province: "KwaZulu-Natal", state_or_region: "Durban", country: "South Africa", town_id: towns[3].id},
+  {province: "Free State", state_or_region: "Bloemfontein", country: "South Africa", town_id: towns[4].id}
 ])
 
 puts "4. Creating users..."
@@ -42,8 +42,9 @@ users = User.create!([
 ])
 
 puts "5. Creating profiles..."
+profiles = []
 users.each do |user|
-  Profile.create!(
+  profiles << Profile.create!(
     user: user,
     mobile: "+27#{rand(10**9).to_s.rjust(9, '0')}"
   )
@@ -51,8 +52,8 @@ end
 
 puts "6. Creating shops..."
 shops = Shop.create!([
-  {user: users[1], name: "Johannesburg School Store", description: "Official store for Johannesburg schools", location: "Gauteng"},
-  {user: users[0], name: "Test Shop", description: "Test shop for development", location: "Western Cape"}
+  {user_id: users[1].id, name: "Johannesburg School Store", description: "Official store for Johannesburg schools", location: "Gauteng"},
+  {user_id: users[0].id, name: "Test Shop", description: "Test shop for development", location: "Western Cape"}
 ])
 
 puts "7. Creating brands..."
@@ -104,80 +105,144 @@ tags = Tag.create!([
   {name: "essential", tag_type: "priority"}
 ])
 
-puts "14. Creating sample items..."
-items = Item.create!([
-  {
-    shop: shops[0],
-    name: "Boys Soccer Jersey",
-    description: "Official school soccer jersey for boys team",
-    price: 45.00,
-    quantity: 10,
-    reserved: 0,
-    status: 1, # active
-    item_type_id: nil, # Not in your schema but referenced
-    school: schools[0],
-    brand: brands[0], # Nike
-    size: item_sizes[2], # M
-    item_condition: item_conditions[0], # New
-    location: locations[0],
-    province: provinces[2], # Gauteng
-    gender: genders[0], # Boys
-    meta: {color: "Red", size: "M"}
-  },
-  {
-    shop: shops[0],
-    name: "School Blazer",
-    description: "Official school blazer with school crest",
-    price: 120.00,
-    quantity: 5,
-    reserved: 0,
-    status: 1,
-    item_type_id: nil,
-    school: schools[0],
-    brand: brands[4], # SchoolBrand
-    size: item_sizes[3], # L
-    item_condition: item_conditions[0], # New
-    location: locations[0],
-    province: provinces[2], # Gauteng
-    gender: genders[0], # Boys
-    meta: {color: "Navy", size: "L"}
-  },
-  {
-    shop: shops[1],
-    name: "Girls Basketball Jersey",
-    description: "Basketball jersey for girls team",
-    price: 35.00,
-    quantity: 8,
-    reserved: 0,
-    status: 1,
-    item_type_id: nil,
-    school: schools[2],
-    brand: brands[1], # Adidas
-    size: item_sizes[1], # S
-    item_condition: item_conditions[1], # Used - Like New
-    location: locations[2],
-    province: provinces[8], # Western Cape
-    gender: genders[1], # Girls
-    meta: {color: "White", size: "S"}
-  }
+puts "14. Creating main categories..."
+main_categories = MainCategory.create!([
+  {name: "Textbooks & Study Materials", description: "Academic books and study resources", is_active: true, display_order: 0},
+  {name: "Electronics & Gadgets", description: "Laptops, phones, calculators, and other electronic devices", icon_name: "electronics-icon", display_order: 1, is_active: true},
+  {name: "Clothing & Accessories", description: "Uniforms, casual wear, bags, and accessories", icon_name: "clothing-icon", display_order: 2, is_active: true},
+  {name: "Stationery & Supplies", description: "Notebooks, pens, art supplies, and study materials", icon_name: "stationery-icon", display_order: 3, is_active: true}
 ])
 
-puts "15. Creating item tags..."
+puts "15. Creating sub categories..."
+sub_categories = SubCategory.create!([
+  {name: "Textbooks", main_category_id: main_categories[0].id, is_active: true},
+  {name: "Study Guides", main_category_id: main_categories[0].id, is_active: true},
+  {name: "Laptops", main_category_id: main_categories[1].id, is_active: true},
+  {name: "Calculators", main_category_id: main_categories[1].id, is_active: true},
+  {name: "Uniforms", main_category_id: main_categories[2].id, is_active: true},
+  {name: "Sports Wear", main_category_id: main_categories[2].id, is_active: true},
+  {name: "Notebooks", main_category_id: main_categories[3].id, is_active: true},
+  {name: "Pens & Pencils", main_category_id: main_categories[3].id, is_active: true}
+])
+
+puts "16. Creating item types (linked to main categories)..."
+# ItemType belongs to MainCategory directly
+item_types = ItemType.create!([
+  {name: "Soccer Jersey", main_category_id: main_categories[2].id, is_active: true}, # Clothing
+  {name: "Basketball Jersey", main_category_id: main_categories[2].id, is_active: true}, # Clothing
+  {name: "School Blazer", main_category_id: main_categories[2].id, is_active: true}, # Clothing
+  {name: "Math Textbook", main_category_id: main_categories[0].id, is_active: true}, # Textbooks
+  {name: "Scientific Calculator", main_category_id: main_categories[1].id, is_active: true} # Electronics
+])
+
+puts "17. Creating sample items..."
+items = []
+
+# Item 1 - Boys Soccer Jersey
+item1 = Item.create!(
+  shop_id: shops[0].id,
+  name: "Boys Soccer Jersey",
+  description: "Official school soccer jersey for boys team",
+  price: 45.00,
+  total_quantity: 10,
+  total_reserved: 0,
+  status: 1, # active
+  school_id: schools[0].id,
+  brand_id: brands[0].id, # Nike
+  item_type_id: item_types[0].id, # Soccer Jersey
+  main_category_id: main_categories[2].id, # Clothing
+  sub_category_id: sub_categories[5].id, # Sports Wear
+  location_id: locations[0].id,
+  province_id: provinces[2].id, # Gauteng
+  gender_id: genders[0].id, # Boys
+  item_condition_id: item_conditions[0].id, # New
+  min_price: 45.00,
+  max_price: 45.00,
+  available_variants_count: 1,
+  meta: {color: "Red", size: "M"}
+)
+items << item1
+
+# Item 2 - School Blazer
+item2 = Item.create!(
+  shop_id: shops[0].id,
+  name: "School Blazer",
+  description: "Official school blazer with school crest",
+  price: 120.00,
+  total_quantity: 5,
+  total_reserved: 0,
+  status: 1,
+  school_id: schools[0].id,
+  brand_id: brands[4].id, # SchoolBrand
+  item_type_id: item_types[2].id, # School Blazer
+  main_category_id: main_categories[2].id, # Clothing
+  sub_category_id: sub_categories[4].id, # Uniforms
+  location_id: locations[0].id,
+  province_id: provinces[2].id, # Gauteng
+  gender_id: genders[0].id, # Boys
+  item_condition_id: item_conditions[0].id, # New
+  min_price: 120.00,
+  max_price: 120.00,
+  available_variants_count: 1,
+  meta: {color: "Navy", size: "L"}
+)
+items << item2
+
+# Item 3 - Girls Basketball Jersey
+item3 = Item.create!(
+  shop_id: shops[1].id,
+  name: "Girls Basketball Jersey",
+  description: "Basketball jersey for girls team",
+  price: 35.00,
+  total_quantity: 8,
+  total_reserved: 0,
+  status: 1,
+  school_id: schools[2].id,
+  brand_id: brands[1].id, # Adidas
+  item_type_id: item_types[1].id, # Basketball Jersey
+  main_category_id: main_categories[2].id, # Clothing
+  sub_category_id: sub_categories[5].id, # Sports Wear
+  location_id: locations[2].id,
+  province_id: provinces[8].id, # Western Cape
+  gender_id: genders[1].id, # Girls
+  item_condition_id: item_conditions[1].id, # Used - Like New
+  min_price: 35.00,
+  max_price: 35.00,
+  available_variants_count: 1,
+  meta: {color: "White", size: "S"}
+)
+items << item3
+
+puts "Created #{items.count} items"
+
+puts "18. Creating item tags..."
 ItemTag.create!([
-  {item: items[0], tag: tags[0]}, # soccer
-  {item: items[0], tag: tags[2]}, # school team
-  {item: items[0], tag: tags[4]}, # sports
-  {item: items[1], tag: tags[3]}, # uniform
-  {item: items[2], tag: tags[1]}, # basketball
-  {item: items[2], tag: tags[2]}, # school team
-  {item: items[2], tag: tags[4]}  # sports
+  {item_id: items[0].id, tag_id: tags[0].id}, # soccer
+  {item_id: items[0].id, tag_id: tags[2].id}, # school team
+  {item_id: items[0].id, tag_id: tags[4].id}, # sports
+  {item_id: items[1].id, tag_id: tags[3].id}, # uniform
+  {item_id: items[2].id, tag_id: tags[1].id}, # basketball
+  {item_id: items[2].id, tag_id: tags[2].id}, # school team
+  {item_id: items[2].id, tag_id: tags[4].id}  # sports
 ])
 
-puts "16. Creating sample orders..."
+puts "19. Creating item variants..."
+# Create variants for sizes/colors
+items.each_with_index do |item, index|
+  ItemVariant.create!(
+    item_id: item.id,
+    size_id: index == 0 ? item_sizes[2].id : (index == 1 ? item_sizes[3].id : item_sizes[1].id),
+    color_id: index == 0 ? item_colors[1].id : (index == 1 ? item_colors[3].id : item_colors[0].id),
+    quantity: item.total_quantity,
+    price: item.price
+  )
+end
+
+puts "20. Creating sample orders..."
 orders = Order.create!([
   {
-    shop: shops[0],
-    buyer: users[2],
+    shop_id: shops[0].id,
+    buyer_id: users[2].id,
     price: 45.00,
     total_amount: 50.00,
     order_status: 1, # completed
@@ -186,8 +251,8 @@ orders = Order.create!([
     order_number: "ORD-#{Time.now.to_i}-#{SecureRandom.hex(3).upcase}"
   },
   {
-    shop: shops[1],
-    buyer: users[2],
+    shop_id: shops[1].id,
+    buyer_id: users[2].id,
     price: 35.00,
     total_amount: 40.00,
     order_status: 0, # pending
@@ -197,25 +262,25 @@ orders = Order.create!([
   }
 ])
 
-puts "17. Creating order items..."
+puts "21. Creating order items..."
 OrderItem.create!([
   {
-    order: orders[0],
-    item: items[0],
+    order_id: orders[0].id,
+    item_id: items[0].id,
     item_name: items[0].name,
     actual_price: items[0].price,
     total_price: items[0].price,
     quantity: 1,
-    shop: shops[0]
+    shop_id: shops[0].id
   },
   {
-    order: orders[1],
-    item: items[2],
+    order_id: orders[1].id,
+    item_id: items[2].id,
     item_name: items[2].name,
     actual_price: items[2].price,
     total_price: items[2].price,
     quantity: 1,
-    shop: shops[1]
+    shop_id: shops[1].id
   }
 ])
 
@@ -227,6 +292,7 @@ puts "- #{Province.count} provinces"
 puts "- #{Town.count} towns"
 puts "- #{Location.count} locations"
 puts "- #{User.count} users"
+puts "- #{Profile.count} profiles"
 puts "- #{Shop.count} shops"
 puts "- #{Brand.count} brands"
 puts "- #{ItemCondition.count} item conditions"
@@ -235,18 +301,11 @@ puts "- #{ItemColor.count} item colors"
 puts "- #{Gender.count} genders"
 puts "- #{School.count} schools"
 puts "- #{Tag.count} tags"
+puts "- #{MainCategory.count} main categories"
+puts "- #{SubCategory.count} sub categories"
+puts "- #{ItemType.count} item types"
 puts "- #{Item.count} items"
+puts "- #{ItemVariant.count} item variants"
 puts "- #{Order.count} orders"
-puts "=" * 50
-puts "\nSample Data for Testing:"
-puts "Shop Owner User ID: #{users[1].id}"
-puts "Shop ID: #{shops[0].id}"
-puts "Item IDs: #{items.map(&:id).join(', ')}"
-puts "School ID: #{schools[0].id}"
-puts "Brand ID: #{brands[0].id}"
-puts "Size ID (M): #{item_sizes[2].id}"
-puts "Gender ID (Boys): #{genders[0].id}"
-puts "Condition ID (New): #{item_conditions[0].id}"
-puts "Province ID (Gauteng): #{provinces[2].id}"
-puts "Location ID (Johannesburg): #{locations[0].id}"
+puts "- #{OrderItem.count} order items"
 puts "=" * 50

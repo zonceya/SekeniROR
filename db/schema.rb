@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_10_223814) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_20_001503) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -305,6 +305,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_10_223814) do
     t.decimal "min_price", precision: 10, scale: 2
     t.decimal "max_price", precision: 10, scale: 2
     t.integer "available_variants_count", default: 0
+    t.integer "item_condition_id"
     t.index ["id"], name: "idx_items_category"
     t.index ["main_category_id"], name: "index_items_on_main_category_id"
     t.index ["sub_category_id"], name: "index_items_on_sub_category_id"
