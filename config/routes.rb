@@ -47,6 +47,7 @@ Rails.application.routes.draw do
           get :viewShopItem        # GET /api/v1/items/:id/viewShopItem
           post :reserve_item       # POST /api/v1/items/:id/reserve_item
           put :updateItem          # PUT /api/v1/items/:id/updateItem
+          put :update   
           delete :deleteItem       # DELETE /api/v1/items/:id/deleteItem
           patch :mark_as_sold      # PATCH /api/v1/items/:id/mark_as_sold
           post :hold               # POST /api/v1/items/:id/hold
