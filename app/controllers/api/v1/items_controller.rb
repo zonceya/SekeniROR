@@ -110,240 +110,240 @@ module Api
       end
 
       # POST /api/v1/items - Add item to current user's shop
-def createItems
-  Rails.logger.info "Creating item for user #{@current_user.id}, shop: #{@current_user.shop&.id}"
-  
-  shop = @current_user.shop
-  
-  if shop.nil?
-    Rails.logger.error "User #{@current_user.id} has no shop"
-    return render json: { 
-      success: false,
-      error: "You need to have a shop to create items" 
-    }, status: :unprocessable_entity
-  end
-  
-  # Log received parameters
-  Rails.logger.info "Item params: #{params[:item].inspect}"
-  
-  # Validate required fields for ITEM (not variant)
-  required_fields = [:name, :description, :main_category_id, :sub_category_id]
-  missing_fields = required_fields.select { |field| params[:item][field].blank? }
-  
-  if missing_fields.any?
-    Rails.logger.error "Missing fields: #{missing_fields}"
-    return render json: { 
-      success: false,
-      error: "Missing required fields: #{missing_fields.join(', ')}"
-    }, status: :unprocessable_entity
-  end
-  
-  # Validate main_category exists
-  main_category = MainCategory.find_by(id: params[:item][:main_category_id])
-  unless main_category
-    Rails.logger.error "Invalid main_category_id: #{params[:item][:main_category_id]}"
-    return render json: { 
-      success: false,
-      error: "Invalid main category",
-      available_categories: MainCategory.active.pluck(:id, :name)
-    }, status: :unprocessable_entity
-  end
-  
-  # Validate sub_category exists and belongs to main_category
-  sub_category = SubCategory.find_by(id: params[:item][:sub_category_id])
-  unless sub_category
-    Rails.logger.error "Invalid sub_category_id: #{params[:item][:sub_category_id]}"
-    return render json: { 
-      success: false,
-      error: "Invalid sub category",
-      available_sub_categories: main_category.sub_categories.active.pluck(:id, :name)
-    }, status: :unprocessable_entity
-  end
-  
-  if sub_category.main_category_id != main_category.id
-    Rails.logger.error "Sub category #{sub_category.id} doesn't belong to main category #{main_category.id}"
-    return render json: { 
-      success: false,
-      error: "Sub category must belong to the selected main category"
-    }, status: :unprocessable_entity
-  end
-  
-  begin
-    # Extract variant-specific parameters
-    variant_params = {
-      size_id: params[:item][:size_id],
-      color_id: params[:item][:color_id],
-      condition_id: params[:item][:item_condition_id],
-      price: params[:item][:price],
-      quantity: params[:item][:quantity]
-    }
-    
-    # Build item with basic info (no variant-specific fields)
-    item_params = item_params_for_create.to_h
-    
-    # Remove variant-specific fields from item params
-    item_params = item_params.except(:size_id, :color_id, :item_condition_id, :price, :quantity)
-    
-    # Set total_quantity from variant quantity
-    item_params[:total_quantity] = variant_params[:quantity].to_i if variant_params[:quantity]
-    
-    item = shop.items.new(item_params)
-    item.item_type_id = nil
-    
-    # Save the item
-    if item.save
-      Rails.logger.info "Item saved successfully: #{item.id}"
-      
-      # Create item variant if we have variant data
-      if variant_params[:size_id].present? || variant_params[:color_id].present? || variant_params[:condition_id].present?
-        begin
-          item_variant = item.item_variants.create!(
-            size_id: variant_params[:size_id],
-            color_id: variant_params[:color_id],
-            condition_id: variant_params[:condition_id],
-            price: variant_params[:price],
-            quantity: variant_params[:quantity] || 0,
-            is_active: true
-          )
-          Rails.logger.info "Item variant created: #{item_variant.id}"
-        rescue => e
-          Rails.logger.error "Failed to create item variant: #{e.message}"
-          # Don't fail the whole request if variant creation fails
+      def createItems
+        Rails.logger.info "Creating item for user #{@current_user.id}, shop: #{@current_user.shop&.id}"
+        
+        shop = @current_user.shop
+        
+        if shop.nil?
+          Rails.logger.error "User #{@current_user.id} has no shop"
+          return render json: { 
+            success: false,
+            error: "You need to have a shop to create items" 
+          }, status: :unprocessable_entity
         end
-      end
-      
-      # Handle tags
-      if params[:item][:tag_ids].present?
-  # Remove duplicates from the incoming array
-  unique_tag_ids = params[:item][:tag_ids].map(&:to_i).uniq
-  
-  unique_tag_ids.each do |tag_id|
-    # Check if tag exists and if this item doesn't already have it
-    if Tag.exists?(id: tag_id)
-      unless item.item_tags.exists?(tag_id: tag_id)
-        item.item_tags.create!(tag_id: tag_id)
-        Rails.logger.info "✅ Added tag #{tag_id} to item #{item.id}"
-      else
-        Rails.logger.info "⏭️ Tag #{tag_id} already exists for item #{item.id}, skipping"
-      end
-    else
-      Rails.logger.warn "⚠️ Tag ID #{tag_id} does not exist, skipping"
-    end
-  end
-end
-      
-      # Handle images
-      image_urls = []
-      if params[:item] && params[:item][:images].present?
-        begin
-          image_upload_results = ImageUploadService.upload_item_images(
-            item, 
-            params[:item][:images]
-          )
-          
-          successful_uploads = image_upload_results.select { |r| r[:success] }
-          failed_uploads = image_upload_results.select { |r| !r[:success] }
-          
-          image_urls = generate_item_image_urls(item)
-          
-          if failed_uploads.any?
-            Rails.logger.warn "Some images failed to upload for item #{item.id}: #{failed_uploads.map { |f| f[:error] }}"
-          end
-        rescue => e
-          Rails.logger.error "Image upload error: #{e.message}"
+        
+        # Log received parameters
+        Rails.logger.info "Item params: #{params[:item].inspect}"
+        
+        # Validate required fields for ITEM (not variant)
+        required_fields = [:name, :description, :main_category_id, :sub_category_id]
+        missing_fields = required_fields.select { |field| params[:item][field].blank? }
+        
+        if missing_fields.any?
+          Rails.logger.error "Missing fields: #{missing_fields}"
+          return render json: { 
+            success: false,
+            error: "Missing required fields: #{missing_fields.join(', ')}"
+          }, status: :unprocessable_entity
         end
-      end
-      
-      # Return success response with detailed item info
-      render json: {
-        success: true,
-        message: "Item created successfully",
-        item: {
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          main_category_id: item.main_category_id,
-          main_category_name: main_category.name,
-          sub_category_id: item.sub_category_id,
-          sub_category_name: sub_category.name,
-          gender_id: item.gender_id,
-          gender_name: item.gender&.name,
-          school_id: item.school_id,
-          school_name: item.school&.name,
-          brand_id: item.brand_id,
-          brand_name: item.brand&.name,
-          province_id: item.province_id,
-          province_name: item.province&.name,
-          town_id: item.location_id,
-          town_name: item.location&.state_or_region || item.location&.town&.name,
-          shop_id: item.shop_id,
-          shop_name: shop.name,
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-          tags: item.tags.pluck(:name),
-          tag_ids: item.tags.pluck(:id)
-        },
-        variants: item.item_variants.map do |variant|
-          {
-            id: variant.id,
-            size_id: variant.size_id,
-            size_name: variant.size&.name,
-            color_id: variant.color_id,
-            color_name: variant.color&.name,
-            condition_id: variant.condition_id,
-            condition_name: variant.condition&.name,
-            price: variant.price&.to_f,
-            quantity: variant.quantity,
-            sku: variant.sku
+        
+        # Validate main_category exists
+        main_category = MainCategory.find_by(id: params[:item][:main_category_id])
+        unless main_category
+          Rails.logger.error "Invalid main_category_id: #{params[:item][:main_category_id]}"
+          return render json: { 
+            success: false,
+            error: "Invalid main category",
+            available_categories: MainCategory.active.pluck(:id, :name)
+          }, status: :unprocessable_entity
+        end
+        
+        # Validate sub_category exists and belongs to main_category
+        sub_category = SubCategory.find_by(id: params[:item][:sub_category_id])
+        unless sub_category
+          Rails.logger.error "Invalid sub_category_id: #{params[:item][:sub_category_id]}"
+          return render json: { 
+            success: false,
+            error: "Invalid sub category",
+            available_sub_categories: main_category.sub_categories.active.pluck(:id, :name)
+          }, status: :unprocessable_entity
+        end
+        
+        if sub_category.main_category_id != main_category.id
+          Rails.logger.error "Sub category #{sub_category.id} doesn't belong to main category #{main_category.id}"
+          return render json: { 
+            success: false,
+            error: "Sub category must belong to the selected main category"
+          }, status: :unprocessable_entity
+        end
+        
+        begin
+          # Extract variant-specific parameters
+          variant_params = {
+            size_id: params[:item][:size_id],
+            color_id: params[:item][:color_id],
+            condition_id: params[:item][:item_condition_id],
+            price: params[:item][:price],
+            quantity: params[:item][:quantity]
           }
-        end,
-        images: image_urls
-      }, status: :created
-      
-    else
-      Rails.logger.error "Item save failed: #{item.errors.full_messages}"
-      render json: { 
-        success: false,
-        error: "Failed to create item",
-        errors: item.errors.full_messages,
-        details: item.errors.details
-      }, status: :unprocessable_entity
-    end
-    
-  rescue => e
-    Rails.logger.error "Exception in createItems: #{e.message}\n#{e.backtrace.join("\n")}"
-    render json: { 
-      success: false,
-      error: "Server error: #{e.message}",
-      trace: Rails.env.development? ? e.backtrace : nil
-    }, status: :internal_server_error
-  end
-end
+          
+          # Build item with basic info (no variant-specific fields)
+          item_params = item_params_for_create.to_h
+          
+          # Remove variant-specific fields from item params
+          item_params = item_params.except(:size_id, :color_id, :item_condition_id, :price, :quantity)
+          
+          # Set total_quantity from variant quantity
+          item_params[:total_quantity] = variant_params[:quantity].to_i if variant_params[:quantity]
+          
+          item = shop.items.new(item_params)
+          item.item_type_id = nil
+          
+          # Save the item
+          if item.save
+            Rails.logger.info "Item saved successfully: #{item.id}"
+            
+            # Create item variant if we have variant data
+            if variant_params[:size_id].present? || variant_params[:color_id].present? || variant_params[:condition_id].present?
+              begin
+                item_variant = item.item_variants.create!(
+                  size_id: variant_params[:size_id],
+                  color_id: variant_params[:color_id],
+                  condition_id: variant_params[:condition_id],
+                  price: variant_params[:price],
+                  quantity: variant_params[:quantity] || 0,
+                  is_active: true
+                )
+                Rails.logger.info "Item variant created: #{item_variant.id}"
+              rescue => e
+                Rails.logger.error "Failed to create item variant: #{e.message}"
+                # Don't fail the whole request if variant creation fails
+              end
+            end
+            
+            # Handle tags
+            if params[:item][:tag_ids].present?
+              # Remove duplicates from the incoming array
+              unique_tag_ids = params[:item][:tag_ids].map(&:to_i).uniq
+              
+              unique_tag_ids.each do |tag_id|
+                # Check if tag exists and if this item doesn't already have it
+                if Tag.exists?(id: tag_id)
+                  unless item.item_tags.exists?(tag_id: tag_id)
+                    item.item_tags.create!(tag_id: tag_id)
+                    Rails.logger.info "✅ Added tag #{tag_id} to item #{item.id}"
+                  else
+                    Rails.logger.info "⏭️ Tag #{tag_id} already exists for item #{item.id}, skipping"
+                  end
+                else
+                  Rails.logger.warn "⚠️ Tag ID #{tag_id} does not exist, skipping"
+                end
+              end
+            end
+            
+            # Handle images
+            image_urls = []
+            if params[:item] && params[:item][:images].present?
+              begin
+                image_upload_results = ImageUploadService.upload_item_images(
+                  item, 
+                  params[:item][:images]
+                )
+                
+                successful_uploads = image_upload_results.select { |r| r[:success] }
+                failed_uploads = image_upload_results.select { |r| !r[:success] }
+                
+                image_urls = generate_item_image_urls(item)
+                
+                if failed_uploads.any?
+                  Rails.logger.warn "Some images failed to upload for item #{item.id}: #{failed_uploads.map { |f| f[:error] }}"
+                end
+              rescue => e
+                Rails.logger.error "Image upload error: #{e.message}"
+              end
+            end
+            
+            # Return success response with detailed item info
+            render json: {
+              success: true,
+              message: "Item created successfully",
+              item: {
+                id: item.id,
+                name: item.name,
+                description: item.description,
+                main_category_id: item.main_category_id,
+                main_category_name: main_category.name,
+                sub_category_id: item.sub_category_id,
+                sub_category_name: sub_category.name,
+                gender_id: item.gender_id,
+                gender_name: item.gender&.name,
+                school_id: item.school_id,
+                school_name: item.school&.name,
+                brand_id: item.brand_id,
+                brand_name: item.brand&.name,
+                province_id: item.province_id,
+                province_name: item.province&.name,
+                town_id: item.location_id,
+                town_name: item.location&.state_or_region || item.location&.town&.name,
+                shop_id: item.shop_id,
+                shop_name: shop.name,
+                created_at: item.created_at,
+                updated_at: item.updated_at,
+                tags: item.tags.pluck(:name),
+                tag_ids: item.tags.pluck(:id)
+              },
+              variants: item.item_variants.map do |variant|
+                {
+                  id: variant.id,
+                  size_id: variant.size_id,
+                  size_name: variant.size&.name,
+                  color_id: variant.color_id,
+                  color_name: variant.color&.name,
+                  condition_id: variant.condition_id,
+                  condition_name: variant.condition&.name,
+                  price: variant.price&.to_f,
+                  quantity: variant.quantity,
+                  sku: variant.sku
+                }
+              end,
+              images: image_urls
+            }, status: :created
+            
+          else
+            Rails.logger.error "Item save failed: #{item.errors.full_messages}"
+            render json: { 
+              success: false,
+              error: "Failed to create item",
+              errors: item.errors.full_messages,
+              details: item.errors.details
+            }, status: :unprocessable_entity
+          end
+          
+        rescue => e
+          Rails.logger.error "Exception in createItems: #{e.message}\n#{e.backtrace.join("\n")}"
+          render json: { 
+            success: false,
+            error: "Server error: #{e.message}",
+            trace: Rails.env.development? ? e.backtrace : nil
+          }, status: :internal_server_error
+        end
+      end
 
-# Separate params method for creating items (without variant-specific fields)
-def item_params_for_create
-  params.require(:item).permit(
-    :name, :description, 
-    :main_category_id, :sub_category_id,
-    :gender_id, :school_id, :brand_id,
-    :province_id, :location_id, :label, :status,
-    :images,
-    tag_ids: []
-  )
-end
+      # Separate params method for creating items (without variant-specific fields)
+      def item_params_for_create
+        params.require(:item).permit(
+          :name, :description, 
+          :main_category_id, :sub_category_id,
+          :gender_id, :school_id, :brand_id,
+          :province_id, :location_id, :label, :status,
+          :images,
+          tag_ids: []
+        )
+      end
 
-# Keep existing item_params for updates
-def item_params
-  params.require(:item).permit(
-    :name, :description, :price, :quantity,
-    :size_id, :color_id, :item_condition_id,
-    :main_category_id, :sub_category_id,
-    :gender_id, :school_id, :brand_id, 
-    :province_id, :location_id, :label, :status,
-    :images,
-    tag_ids: []
-  )
-end
+      # Keep existing item_params for updates
+      def item_params
+        params.require(:item).permit(
+          :name, :description, :price, :quantity,
+          :size_id, :color_id, :item_condition_id,
+          :main_category_id, :sub_category_id,
+          :gender_id, :school_id, :brand_id, 
+          :province_id, :location_id, :label, :status,
+          :images,
+          tag_ids: []
+        )
+      end
 
       def add_images
         item = Item.find_by(id: params[:id], deleted: false)
@@ -422,6 +422,51 @@ end
           message: "Image removed successfully",
           remaining_images: item.reload.images.count
         }, status: :ok
+      end
+
+      # COMPREHENSIVE UPDATE METHOD - Handles fields, tags, and images in one request
+      def updateItem
+        # Ensure user owns the item
+        if @item.shop.user_id != @current_user.id
+          return render json: { 
+            success: false,
+            error: "Not authorized" 
+          }, status: :unauthorized
+        end
+        
+        begin
+          ActiveRecord::Base.transaction do
+            # 1. Update basic item fields (excluding images)
+            if params[:item].present?
+              update_item_attributes
+            end
+            
+            # 2. Update tags if provided
+            if params[:item].present? && params[:item][:tag_ids].present?
+              update_item_tags
+            end
+            
+            # 3. Handle image operations
+            handle_image_operations if image_operations_present?
+            
+            # 4. Handle complete image replacement
+            handle_image_replacement if params[:replace_images].present?
+          end
+          
+          # Return success response with updated item
+          render json: {
+            success: true,
+            message: "Item updated successfully",
+            item: format_item_response(@item.reload)
+          }
+          
+        rescue => e
+          Rails.logger.error "Update failed: #{e.message}\n#{e.backtrace.join("\n")}"
+          render json: {
+            success: false,
+            error: "Update failed: #{e.message}"
+          }, status: :unprocessable_entity
+        end
       end
 
       # GET /api/v1/shops/:shop_id/items - Public view of a specific shop's items
@@ -570,64 +615,25 @@ end
         render json: items
       end
 
-      def viewShopItem
-        render json: {
-          success: true,
-          item: @item.as_json(include: {
-            shop: { only: [:id, :name] },
-            main_category: { only: [:id, :name] },
-            sub_category: { only: [:id, :name] },
-            item_condition: { only: [:id, :name] },
-            gender: { only: [:id, :name] },
-            school: { only: [:id, :name] },
-            size: { only: [:id, :name] },
-            color: { only: [:id, :name] },
-            province: { only: [:id, :name] },
-            location: { only: [:id, :name] },
-            brand: { only: [:id, :name] },
-            tags: { only: [:id, :name] }
-          })
-        }
-      end
-
-      def updateItem
-        # Ensure user owns the item they're trying to update
-        if @item.shop.user_id != @current_user.id
-          return render json: { error: "Not authorized" }, status: :unauthorized
-        end
-        
-        # Validate category consistency if categories are being updated
-        if params[:item][:main_category_id].present? || params[:item][:sub_category_id].present?
-          main_category_id = params[:item][:main_category_id] || @item.main_category_id
-          sub_category_id = params[:item][:sub_category_id] || @item.sub_category_id
-          
-          if sub_category_id.present?
-            sub_category = SubCategory.find_by(id: sub_category_id)
-            if sub_category && sub_category.main_category_id != main_category_id.to_i
-              return render json: {
-                success: false,
-                error: "Sub category must belong to the selected main category"
-              }, status: :unprocessable_entity
-            end
-          end
-        end
-        
-        if @item.update(item_params)
-          render json: {
-            success: true,
-            message: "Item updated successfully",
-            item: @item.reload.as_json(include: {
-              main_category: { only: [:id, :name] },
-              sub_category: { only: [:id, :name] }
-            })
-          }
-        else
-          render json: {
-            success: false,
-            errors: @item.errors.full_messages
-          }, status: :unprocessable_entity
-        end
-      end
+     def viewShopItem
+     render json: {
+        success: true,
+        item: @item.as_json(
+         include: {
+        shop: { only: [:id, :name] },
+        main_category: { only: [:id, :name] },
+        sub_category: { only: [:id, :name] },
+        gender: { only: [:id, :name] },
+        school: { only: [:id, :name] },
+        province: { only: [:id, :name] },
+        brand: { only: [:id, :name] },
+        tags: { only: [:id, :name] }
+      }
+    ).merge(
+      images: @item.images.attached? ? generate_item_image_urls(@item) : []
+    )
+  }
+end
 
       def deleteItem
         # Ensure user owns the item they're trying to delete
@@ -764,6 +770,157 @@ end
         end
       end
 
+      # Helper methods for the comprehensive update
+      def update_item_attributes
+        # Extract only the fields that are present and allowed
+        update_data = item_params_for_update.to_h
+        
+        # Remove image-related fields from item attributes
+        update_data.except!(:images, :tag_ids)
+        
+        # Only update if there are actual fields to update
+        if update_data.present?
+          unless @item.update(update_data)
+            raise StandardError, @item.errors.full_messages.join(", ")
+          end
+        end
+      end
+      
+      def update_item_tags
+        # Remove duplicates
+        unique_tag_ids = params[:item][:tag_ids].map(&:to_i).uniq
+        
+        # Clear existing tags
+        @item.item_tags.destroy_all
+        
+        # Add new tags
+        unique_tag_ids.each do |tag_id|
+          if Tag.exists?(id: tag_id)
+            @item.item_tags.create!(tag_id: tag_id)
+            Rails.logger.info "Added tag #{tag_id} to item #{@item.id}"
+          end
+        end
+      end
+      
+      def handle_image_operations
+        # Remove specific images by ID
+        if params[:remove_image_ids].present?
+          remove_specific_images
+        end
+        
+        # Add new images
+        if params[:add_images].present?
+          add_new_images
+        end
+      end
+      
+      def remove_specific_images
+        image_ids = Array(params[:remove_image_ids]).map(&:to_i)
+        
+        image_ids.each do |image_id|
+          image = @item.images.find_by(id: image_id)
+          if image
+            image.purge
+            Rails.logger.info "Removed image #{image_id} from item #{@item.id}"
+          else
+            Rails.logger.warn "Image #{image_id} not found for item #{@item.id}"
+          end
+        end
+      end
+      
+      def add_new_images
+        new_images = Array(params[:add_images])
+        
+        # Check if adding these would exceed limit
+        total_after_add = @item.images.count + new_images.size
+        if total_after_add > 3
+          raise StandardError, "Cannot exceed 3 images total. Currently have #{@item.images.count}"
+        end
+        
+        # Upload new images
+        results = ImageUploadService.upload_item_images(@item, new_images)
+        
+        # Check for failures
+        failed = results.select { |r| !r[:success] }
+        if failed.any?
+          raise StandardError, "Failed to upload images: #{failed.map { |f| f[:error] }.join(', ')}"
+        end
+      end
+      
+      def handle_image_replacement
+        # Completely replace all images
+        new_images = Array(params[:replace_images])
+        
+        # Validate count
+        if new_images.size > 3
+          raise StandardError, "Cannot exceed 3 images"
+        end
+        
+        # Remove all existing images
+        @item.images.purge
+        
+        # Upload new images if any
+        if new_images.any?
+          results = ImageUploadService.upload_item_images(@item, new_images)
+          
+          failed = results.select { |r| !r[:success] }
+          if failed.any?
+            raise StandardError, "Failed to upload images: #{failed.map { |f| f[:error] }.join(', ')}"
+          end
+        end
+      end
+      
+      def image_operations_present?
+        params[:remove_image_ids].present? || params[:add_images].present?
+      end
+      
+      def item_params_for_update
+        params.require(:item).permit(
+          :name, :description, :price, :quantity,
+          :size_id, :color_id, :item_condition_id,
+          :main_category_id, :sub_category_id,
+          :gender_id, :school_id, :brand_id, 
+          :province_id, :location_id, :label, :status,
+          tag_ids: []
+        )
+      end
+      
+      def format_item_response(item)
+        {
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          price: item.price.to_f,
+          quantity: item.quantity,
+          available_quantity: item.available_quantity,
+          status: item.status,
+          main_category_id: item.main_category_id,
+          main_category_name: item.main_category&.name,
+          sub_category_id: item.sub_category_id,
+          sub_category_name: item.sub_category&.name,
+          gender_id: item.gender_id,
+          gender_name: item.gender&.name,
+          school_id: item.school_id,
+          school_name: item.school&.name,
+          size_id: item.size_id,
+          size_name: item.size&.name,
+          color_id: item.color_id,
+          color_name: item.color&.name,
+          brand_id: item.brand_id,
+          brand_name: item.brand&.name,
+          condition_id: item.item_condition_id,
+          condition_name: item.item_condition&.name,
+          province_id: item.province_id,
+          province_name: item.province&.name,
+          town_id: item.location_id,
+          town_name: item.location&.state_or_region || item.location&.town&.name,
+          images: generate_item_image_urls(item),
+          tags: item.tags.map { |tag| { id: tag.id, name: tag.name } },
+          created_at: item.created_at,
+          updated_at: item.updated_at
+        }
+      end
+
       def generate_item_image_urls(item)
         return [] unless item.images.attached?
         
@@ -797,8 +954,6 @@ end
           end
         end.compact
       end
-
-      
     end
   end
 end
