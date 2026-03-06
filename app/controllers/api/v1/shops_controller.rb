@@ -1,86 +1,130 @@
-# app/controllers/api/v1/schools_controller.rb
 module Api
   module V1
-    class SchoolsController < ApplicationController
-      protect_from_forgery with: :null_session
-      skip_before_action :verify_authenticity_token
+    class ShopsController < ApplicationController
+      include Authenticatable
+      skip_forgery_protection
 
-      def index
-        # Clean parameters
-        province_id = params[:province_id].to_s.strip
-        query = params[:query].to_s.strip.gsub(/[\n\r]/, '')
-
-        # Validate province_id
-        unless province_id.present?
-          return render json: {
-            schools: [],
-            message: "Please select a province first"
-          }
-        end
-
-        # Validate query length
-        if query.present? && query.length < 2
-          province = find_province(province_id)
-          return render json: {
-            schools: [],
-            message: "Type at least 2 characters to search",
-            province: province
-          }
-        end
-
-        # Base query
-        schools = School.where(province_id: province_id)
-        
-        # Apply search if query is valid
-        if query.present? && query.length >= 2
-          schools = schools.where('name ILIKE ?', "%#{query}%")
-        end
-
-        province = find_province(province_id)
-
-        # Build schools data
-        schools_data = schools.limit(50).map do |school|
-          {
-            id: school.id,
-            name: school.name,
-            province_id: school.province_id,
-            province: province,
-            town_id: school.town_id,
-            school_type: school.school_type
-          }
-        end
-
-        render json: {
-          schools: schools_data,
-          total_count: schools.count,
-          province: province,
-          query: query
-        }
-      end
-
+      # GET /api/v1/shop - Get current user's shop
       def show
-        school = School.find(params[:id])
-        province = find_province(school.province_id)
+        shop = @current_user.shop
+        
+        if shop
+          render json: {
+            success: true,
+            shop: {
+              id: shop.id,
+              name: shop.name,
+              display_name: shop.display_name || "",
+              user_id: shop.user_id,
+              seller_name: shop.user.name,
+              created_at: shop.created_at,
+              items_count: shop.items.where(deleted: false).count
+            }
+          }, status: :ok
+        else
+          render json: { 
+            success: false, 
+            error: "Shop not found" 
+          }, status: :not_found
+        end
+      end
+      
+      # PATCH /api/v1/shop - Update shop display name only
+      def update
+        shop = @current_user.shop
+        
+        if shop.nil?
+          return render json: { 
+            success: false, 
+            error: "Shop not found" 
+          }, status: :not_found
+        end
+        
+        if shop.update(shop_params)
+          render json: {
+            success: true,
+            message: "Shop display name updated",
+            shop: {
+              id: shop.id,
+              name: shop.name,
+              display_name: shop.display_name || ""
+            }
+          }, status: :ok
+        else
+          render json: { 
+            success: false,
+            error: "Failed to update shop name",
+            errors: shop.errors.full_messages 
+          }, status: :unprocessable_entity
+        end
+      end
+      
+      # GET /api/v1/shops/:id/items - Public shop items
+      def items
+        shop = Shop.find_by(id: params[:id])
+        
+        if shop.nil?
+          return render json: { 
+            success: false, 
+            error: "Shop not found" 
+          }, status: :not_found
+        end
+        
+        items = shop.items.where(deleted: false, status: 'active')
+        
+        # Apply filters if needed
+        if params[:sort] == 'newest'
+          items = items.order(created_at: :desc)
+        end
         
         render json: {
-          school: {
-            id: school.id,
-            name: school.name,
-            province_id: school.province_id,
-            province: province,
-            town_id: school.town_id,
-            school_type: school.school_type
-          }
+          success: true,
+          shop: {
+            id: shop.id,
+            name: shop.public_name,
+            seller_name: shop.user.name
+          },
+          items: items.as_json(include: {
+            shop: {
+              only: [:id, :name]
+            }
+          })
         }
-      rescue ActiveRecord::RecordNotFound
-        render json: { error: "School not found" }, status: :not_found
       end
-
+      
+      # GET /api/v1/shops/:id - Public shop view
+      def public_show
+        shop = Shop.find_by(id: params[:id])
+        
+        if shop.nil?
+          return render json: { 
+            success: false, 
+            error: "Shop not found" 
+          }, status: :not_found
+        end
+        
+        render json: {
+          success: true,
+          shop: {
+            id: shop.id,
+            name: shop.public_name,
+            seller: {
+              id: shop.user.id,
+              name: shop.user.name
+            },
+            stats: {
+              total_items: shop.items.where(deleted: false).count,
+              active_items: shop.items.where(deleted: false, status: 'active').count
+            },
+            created_at: shop.created_at
+          }
+        }, status: :ok
+      end
+      
       private
-
-      def find_province(province_id)
-        province = Province.find_by(id: province_id)
-        province ? { id: province.id, name: province.name } : nil
+      
+      def shop_params
+        params.require(:shop).permit(:display_name)
       end
     end
   end
