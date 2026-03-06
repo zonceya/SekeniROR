@@ -3,6 +3,7 @@ module Api
     class ShopsController < ApplicationController
       include Authenticatable
       skip_forgery_protection
+
       # GET /api/v1/shop - Get current user's shop
       def show
         shop = @current_user.shop
@@ -14,7 +15,6 @@ module Api
               id: shop.id,
               name: shop.name,
               display_name: shop.display_name || "",
-              # NO logo_url here - frontend uses user's profile_picture from login
               user_id: shop.user_id,
               seller_name: shop.user.name,
               created_at: shop.created_at,
@@ -58,41 +58,40 @@ module Api
           }, status: :unprocessable_entity
         end
       end
-      # app/controllers/api/v1/shops_controller.rb
-# Add this method to your ShopsController:
-
-# GET /api/v1/shops/:id/items - Public shop items
-    def items
-      shop = Shop.find_by(id: params[:id])
       
-      if shop.nil?
-        return render json: { 
-          success: false, 
-          error: "Shop not found" 
-        }, status: :not_found
-      end
-      
-      items = shop.items.where(deleted: false, status: 'active')
-      
-      # Apply filters if needed
-      if params[:sort] == 'newest'
-        items = items.order(created_at: :desc)
-      end
-      
-      render json: {
-        success: true,
-        shop: {
-          id: shop.id,
-          name: shop.public_name,
-          seller_name: shop.user.name
-        },
-        items: items.as_json(include: {
+      # GET /api/v1/shops/:id/items - Public shop items
+      def items
+        shop = Shop.find_by(id: params[:id])
+        
+        if shop.nil?
+          return render json: { 
+            success: false, 
+            error: "Shop not found" 
+          }, status: :not_found
+        end
+        
+        items = shop.items.where(deleted: false, status: 'active')
+        
+        # Apply filters if needed
+        if params[:sort] == 'newest'
+          items = items.order(created_at: :desc)
+        end
+        
+        render json: {
+          success: true,
           shop: {
-            only: [:id, :name]
-          }
-        })
-      }
-    end
+            id: shop.id,
+            name: shop.public_name,
+            seller_name: shop.user.name
+          },
+          items: items.as_json(include: {
+            shop: {
+              only: [:id, :name]
+            }
+          })
+        }
+      end
+      
       # GET /api/v1/shops/:id - Public shop view
       def public_show
         shop = Shop.find_by(id: params[:id])
@@ -112,7 +111,6 @@ module Api
             seller: {
               id: shop.user.id,
               name: shop.user.name
-              # Frontend will fetch user profile separately if needed
             },
             stats: {
               total_items: shop.items.where(deleted: false).count,

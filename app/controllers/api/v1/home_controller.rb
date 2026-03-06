@@ -22,7 +22,13 @@ module Api
       private
 
       def get_banners
-        Banner.active.ordered.limit(5)
+        Banner.active.ordered.limit(5).map do |banner|
+          {
+            id: banner.id,
+            title: banner.title,
+            image_url: banner.image.attached? ? url_for(banner.image) : nil
+          }
+        end
       end
 
       def get_categories
