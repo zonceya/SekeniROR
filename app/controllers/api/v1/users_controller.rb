@@ -5,68 +5,76 @@ class Api::V1::UsersController < ApplicationController
   before_action :authenticate_user, except: [:sign_in, :reactivate]
 
   def sign_in
-    user = User.find_or_initialize_by(email: params[:email])
-    is_new_user = user.new_record?
+  user = User.find_or_initialize_by(email: params[:email])
+  is_new_user = user.new_record?
 
-    if !is_new_user && user.deleted?
-      return render json: { error: "Account is deactivated. Please contact support to reactivate." }, status: :forbidden
+  if !is_new_user && user.deleted?
+    return render json: { error: "Account is deactivated. Please contact support to reactivate." }, status: :forbidden
+  end
+
+  if is_new_user
+    user.assign_attributes(
+      name: params[:name],
+      auth_mode: params[:auth_mode] || params[:auth_Mode] || "email",
+      status: true,
+      deleted: false,
+      role: 'user'
+    )
+    
+    unless user.save
+      return render json: { error: "Unable to create user", details: user.errors.full_messages }, status: :unprocessable_entity
     end
-
-    if is_new_user
-      user.assign_attributes(
-        name: params[:name],
-        auth_mode: params[:auth_mode] || params[:auth_Mode] || "email",
-        status: true,
-        deleted: false,
-        role: 'user'
-      )
-      
-      unless user.save
-        return render json: { error: "Unable to create user", details: user.errors.full_messages }, status: :unprocessable_entity
-      end
-      
-      # Upload profile picture if provided
-      if params[:profile_picture_url].present?
-        upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
-        unless upload_result[:success]
-          Rails.logger.error "Failed to upload profile picture for new user #{user.id}: #{upload_result[:error]}"
-        end
-      end
-    elsif params[:profile_picture_url].present? && !user.profile_picture.attached?
-      # Existing user without profile picture - try to upload
+    
+    # Upload profile picture if provided
+    if params[:profile_picture_url].present?
       upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
       unless upload_result[:success]
-        Rails.logger.warn "Failed to upload profile picture for existing user #{user.id}: #{upload_result[:error]}"
+        Rails.logger.error "Failed to upload profile picture for new user #{user.id}: #{upload_result[:error]}"
       end
     end
-
-    session = create_session_for(user)
-
-    # Generate profile picture URL if exists
-    profile_url = nil
-    if user.profile_picture.attached?
-      profile_url = generate_profile_url(user)
+  elsif params[:profile_picture_url].present? && !user.profile_picture.attached?
+    # Existing user without profile picture - try to upload
+    upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
+    unless upload_result[:success]
+      Rails.logger.warn "Failed to upload profile picture for existing user #{user.id}: #{upload_result[:error]}"
     end
-
-    render json: {
-      success: true,
-      message: "Sign in successful",
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        mobile: user.mobile,
-        username: user.username,
-        profile_picture_url: profile_url,
-        auth_mode: user.auth_mode,
-        role: user.role,
-        created_at: user.created_at,
-        updated_at: user.updated_at
-      },
-      token: session.token,
-      timestamp: Time.now.iso8601
-    }, status: :ok
   end
+
+  session = create_session_for(user)
+
+  # Generate profile picture URL if exists
+  profile_url = nil
+  if user.profile_picture.attached?
+    profile_url = generate_profile_url(user)
+  end
+
+  # 🔥 ADD THIS: Check if user has school mapped via user_schools table
+  school_mapped = UserSchool.exists?(user_id: user.id)
+  user_school = UserSchool.find_by(user_id: user.id)
+  
+  render json: {
+    success: true,
+    message: "Sign in successful",
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      username: user.username,
+      profile_picture_url: profile_url,
+      auth_mode: user.auth_mode,
+      role: user.role,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+      # 🔥 ADD THESE SCHOOL FIELDS
+      school_mapped: school_mapped,
+      school_id: user_school&.school_id,
+      school_name: user_school&.school&.name
+    },
+    token: session.token,
+    timestamp: Time.now.iso8601
+  }, status: :ok
+end
 
   def chat_rooms
     user_chat_rooms = @current_user.chat_rooms

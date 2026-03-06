@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_20_001503) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_27_232104) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -67,10 +67,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_20_001503) do
     t.index ["digital_wallet_id"], name: "index_bank_accounts_on_digital_wallet_id"
   end
 
-  create_table "banners", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "banners", force: :cascade do |t|
     t.string "title", null: false
     t.text "description"
-    t.string "image_url", null: false
     t.string "thumbnail_url"
     t.string "redirect_url"
     t.string "banner_type", default: "home"

@@ -1,14 +1,15 @@
 # app/models/banner.rb
 class Banner < ApplicationRecord
+  # Comment out Active Storage for now
+  # has_one_attached :image
+  
   # Banner types
   BANNER_TYPES = %w[home school brand sale category promotion].freeze
   TARGET_TYPES = %w[school brand promotion category item].freeze
   
   # Validations
-  validates :title, :image_url, presence: true
-  validates :banner_type, inclusion: { in: BANNER_TYPES }
-  validates :target_type, inclusion: { in: TARGET_TYPES }, allow_nil: true
-  validates :position, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
+  validates :title, presence: true
+  validates :image_url, presence: true  # Use the existing column
 
   # Scopes
   scope :active, -> { where(active: true) }
