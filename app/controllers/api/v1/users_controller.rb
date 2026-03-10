@@ -4,7 +4,8 @@ class Api::V1::UsersController < ApplicationController
   skip_before_action :verify_authenticity_token, only: [:sign_in, :reactivate, :update_mobile]
   before_action :authenticate_user, except: [:sign_in, :reactivate]
 
-  def sign_in
+# app/controllers/api/v1/users_controller.rb
+def sign_in
   user = User.find_or_initialize_by(email: params[:email])
   is_new_user = user.new_record?
 
@@ -25,7 +26,6 @@ class Api::V1::UsersController < ApplicationController
       return render json: { error: "Unable to create user", details: user.errors.full_messages }, status: :unprocessable_entity
     end
     
-    # Upload profile picture if provided
     if params[:profile_picture_url].present?
       upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
       unless upload_result[:success]
@@ -33,7 +33,6 @@ class Api::V1::UsersController < ApplicationController
       end
     end
   elsif params[:profile_picture_url].present? && !user.profile_picture.attached?
-    # Existing user without profile picture - try to upload
     upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
     unless upload_result[:success]
       Rails.logger.warn "Failed to upload profile picture for existing user #{user.id}: #{upload_result[:error]}"
@@ -42,16 +41,9 @@ class Api::V1::UsersController < ApplicationController
 
   session = create_session_for(user)
 
-  # Generate profile picture URL if exists
-  profile_url = nil
-  if user.profile_picture.attached?
-    profile_url = generate_profile_url(user)
-  end
+  profile_url = generate_profile_url(user) if user.profile_picture.attached?
 
-  # 🔥 ADD THIS: Check if user has school mapped via user_schools table
-  school_mapped = UserSchool.exists?(user_id: user.id)
-  user_school = UserSchool.find_by(user_id: user.id)
-  
+  # USE THE NEW HELPER METHODS
   render json: {
     success: true,
     message: "Sign in successful",
@@ -66,10 +58,10 @@ class Api::V1::UsersController < ApplicationController
       role: user.role,
       created_at: user.created_at,
       updated_at: user.updated_at,
-      # 🔥 ADD THESE SCHOOL FIELDS
-      school_mapped: school_mapped,
-      school_id: user_school&.school_id,
-      school_name: user_school&.school&.name
+      # School info using helper methods
+      school_mapped: user.school_mapped?,
+      school_id: user.school_id,
+      school_name: user.school_name
     },
     token: session.token,
     timestamp: Time.now.iso8601

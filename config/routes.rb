@@ -67,12 +67,12 @@ Rails.application.routes.draw do
       # ================================
       resources :brands, only: [:index]
       resources :categories, only: [:index]
-     resources :main_categories, only: [:index] do
-      member do
-        get :sub_categories  # This creates /api/v1/main_categories/:id/sub_categories
+      resources :main_categories, only: [:index] do
+        member do
+          get :sub_categories  # This creates /api/v1/main_categories/:id/sub_categories
+        end
       end
-    end
-    resources :sub_categories, only: [:index]  # Ke
+      resources :sub_categories, only: [:index]
       resources :item_types, only: [:index]
       resources :item_sizes, only: [:index]
       resources :schools, only: [:index]
@@ -84,9 +84,10 @@ Rails.application.routes.draw do
       resources :locations, only: [:index]
       get 'genders', to: 'genders#index'
       get 'locations', to: 'locations#index'
-      get 'all_reference_data', to: 'reference_data#index'  # Add this line
+      get 'all_reference_data', to: 'reference_data#index'
       resources :brands, only: [:index]
       resources :categories, only: [:index]
+      
       # ================================
       # 👤 USER ROUTES
       # ================================
@@ -99,6 +100,15 @@ Rails.application.routes.draw do
       get 'users/:user_id/ratings', to: 'users#user_ratings'
       put 'users/update_profile_picture', to: 'users#update_profile_picture'
      
+      # ================================
+      # 🏫 USER SCHOOL ROUTES - UPDATED
+      # ================================
+      resources :user_schools, only: [:create, :update, :destroy] do
+        collection do
+          get :current  # GET /api/v1/user_schools/current
+        end
+      end
+
       # ================================
       # 💬 CHAT ROUTES
       # ================================

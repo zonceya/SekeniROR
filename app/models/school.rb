@@ -1,11 +1,10 @@
 # app/models/school.rb
 class School < ApplicationRecord
-  # REMOVE these lines - they don't match your database:
-  # belongs_to :town
-  # has_one :province, through: :town
-  
-  # ADD this instead:
   belongs_to :province
+  
+  # ADD THIS association
+  has_many :user_schools
+  has_many :users, through: :user_schools
   
   # Scopes for filtering
   scope :by_province, ->(province_id) { 

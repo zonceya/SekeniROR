@@ -1,3 +1,4 @@
+# app/models/user.rb
 class User < ApplicationRecord
   has_one :profile, dependent: :destroy
   has_many :user_sessions, dependent: :destroy
@@ -7,7 +8,12 @@ class User < ApplicationRecord
   has_one :digital_wallet, dependent: :destroy
   has_many :buyer_chat_rooms, class_name: 'ChatRoom', foreign_key: 'buyer_id'
   has_many :seller_chat_rooms, class_name: 'ChatRoom', foreign_key: 'seller_id'
-  has_one_attached :profile_picture  # Active Storage - NO profile_picture column needed!
+  has_one_attached :profile_picture
+  
+  # ADD THESE SCHOOL ASSOCIATIONS
+  has_many :user_schools, dependent: :destroy
+  has_one :current_school_mapping, -> { order(created_at: :desc) }, class_name: 'UserSchool'
+  has_one :current_school, through: :current_school_mapping, source: :school
   
   # ONLY ONE after_create callback
   after_create :create_profile_and_shop
@@ -50,6 +56,19 @@ class User < ApplicationRecord
       "https://cdn.skoolswap.co.za/default_profile.png"
     end
   end
+  
+  # ADD THESE HELPER METHODS FOR SCHOOL
+  def school_mapped?
+    user_schools.exists?
+  end
+  
+  def school_name
+    current_school&.name
+  end
+  
+  def school_id
+    current_school&.id
+  end
 
   private
 
@@ -68,18 +87,6 @@ class User < ApplicationRecord
   def create_digital_wallet
     DigitalWallet.create(user: self) unless digital_wallet
   end
-
-  # REMOVE THESE CONFLICTING METHODS:
-  # def create_shop_for_user
-  #   return if shop.present?
-  #   create_shop!(name: "#{name}'s Shop", description: "Shop for #{name}")
-  # rescue => e
-  #   Rails.logger.error "🚨 Failed to auto-create shop: #{e.message}"
-  # end
-
-  # def create_profile_for_user
-  #   create_profile(profile_picture: 'default.png')  # ← THIS CAUSES THE ERROR!
-  # end
 
   def set_logout_time
     self.ended_at = Time.current
