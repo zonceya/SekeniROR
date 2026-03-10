@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_03_07_151232) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_10_175951) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -626,6 +626,24 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_07_151232) do
     t.index ["status"], name: "index_transfer_requests_on_status"
   end
 
+  create_table "user_item_views", force: :cascade do |t|
+    t.bigint "user_id"
+    t.uuid "item_id", null: false
+    t.integer "school_id", null: false
+    t.string "source"
+    t.string "session_id"
+    t.integer "view_count", default: 1
+    t.string "device_type"
+    t.string "referrer"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_user_item_views_on_created_at"
+    t.index ["item_id", "view_count"], name: "idx_user_item_views_item_popular"
+    t.index ["school_id", "created_at"], name: "idx_user_item_views_school_recent"
+    t.index ["user_id", "item_id"], name: "idx_user_item_views_user_item"
+    t.index ["user_id"], name: "index_user_item_views_on_user_id"
+  end
+
   create_table "user_ratings", primary_key: "user_id", id: :bigint, default: nil, force: :cascade do |t|
     t.decimal "average_rating", precision: 3, scale: 2, default: "0.0"
     t.integer "total_ratings", default: 0
@@ -754,6 +772,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_07_151232) do
   add_foreign_key "sub_categories", "main_categories"
   add_foreign_key "towns", "provinces", name: "towns_province_id_fkey", on_delete: :nullify
   add_foreign_key "transactions", "orders", name: "transactions_order_id_fk", on_delete: :cascade
+  add_foreign_key "user_item_views", "items"
+  add_foreign_key "user_item_views", "users"
   add_foreign_key "user_ratings", "users", name: "user_ratings_user_id_fkey", on_delete: :cascade
   add_foreign_key "user_schools", "schools", name: "user_schools_school_id_fkey", on_delete: :cascade
   add_foreign_key "user_schools", "users", name: "user_schools_user_id_fkey", on_delete: :cascade

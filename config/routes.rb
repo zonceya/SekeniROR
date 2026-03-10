@@ -59,8 +59,17 @@ Rails.application.routes.draw do
         end
       end
       
-      # Direct routes for specific endpoints
-      get 'my-shop/items', to: 'items#my_shop_items'  # GET /api/v1/my-shop/items (user's shop items)
+      # ================================
+      # 🎯 RECOMMENDATIONS ROUTES
+      # ================================
+      get 'recommendations/home', to: 'recommendations#home'
+      get 'recommendations/uniform', to: 'recommendations#uniform'
+      get 'recommendations/sport', to: 'recommendations#sport'
+      get 'recommendations/recent', to: 'recommendations#recent'
+
+      # Tracking
+      post 'recommendations/track_view', to: 'recommendations#track_view'
+      post 'recommendations/track_click', to: 'recommendations#track_click'  
       
       # ================================
       # 📋 MASTER DATA ROUTES
