@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_27_232104) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_07_151232) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -636,6 +636,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_27_232104) do
     t.integer "user_id"
     t.integer "school_id"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime "updated_at", default: -> { "CURRENT_TIMESTAMP" }
   end
 
   create_table "user_sessions", id: :serial, force: :cascade do |t|
