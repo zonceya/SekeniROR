@@ -19,11 +19,17 @@ class ImageUploadService
       # 1. Download or read the file
       file, is_downloaded = prepare_file(image_source)
 
-      # 2. Generate the unique fingerprint (checksum)
-      file_checksum = Digest::SHA256.file(file.path).hexdigest
-      Rails.logger.info "📊 File checksum: #{file_checksum}"
+      # 2. Generate BOTH checksums - one for deduplication, one for ActiveStorage
+      file.rewind
+      file_hex_checksum = Digest::SHA256.file(file.path).hexdigest
+      file.rewind
+      file_base64_checksum = Digest::MD5.base64digest(file.read)
+      file.rewind
+      
+      Rails.logger.info "📊 File hex checksum (for deduplication): #{file_hex_checksum}"
+      Rails.logger.info "📊 File base64 checksum (for ActiveStorage): #{file_base64_checksum}"
 
-      # 3. Create storage key based on model, purpose, and checksum
+      # 3. Create storage key based on model, purpose, and hex checksum (for deduplication)
       file_extension = File.extname(file.original_filename) || '.jpg'
       
       # Determine folder structure
@@ -33,7 +39,7 @@ class ImageUploadService
                else "#{record.class.name.downcase.pluralize}/#{purpose || 'images'}"
                end
       
-      r2_object_key = "#{folder}/#{file_checksum}#{file_extension}"
+      r2_object_key = "#{folder}/#{file_hex_checksum}#{file_extension}"
 
       # 4. Check cache first for blob existence
       cache_key = "#{CACHE_PREFIX}/blob_exists/#{r2_object_key}"
@@ -72,7 +78,7 @@ class ImageUploadService
             'uploaded_at' => Time.current.iso8601,
             'uploaded_for_id' => record.id.to_s,
             'uploaded_for_type' => record.class.name,
-            'checksum' => file_checksum,
+            'checksum' => file_hex_checksum,
             'purpose' => purpose.to_s
           }
         )
@@ -82,8 +88,8 @@ class ImageUploadService
         Rails.cache.delete(cache_key)
       end
 
-      # 6. Create or find the ActiveStorage Blob
-      blob = find_or_create_blob(r2_object_key, file, file_checksum, record)
+      # 6. Create or find the ActiveStorage Blob - USE BASE64 CHECKSUM HERE!
+      blob = find_or_create_blob(r2_object_key, file, file_base64_checksum, record, file_hex_checksum)
 
       return { success: false, error: "Failed to create blob" } unless blob
 
@@ -113,7 +119,7 @@ class ImageUploadService
           success: true, 
           duplicate: file_exists, 
           blob_key: r2_object_key, 
-          checksum: file_checksum,
+          checksum: file_hex_checksum,
           blob_id: blob.id
         }
       else
@@ -135,29 +141,29 @@ class ImageUploadService
   end
 
   # Method specifically for uploading multiple item images
- def self.upload_item_images(item, image_sources, purposes: nil)
-  results = []
-  
-  Rails.logger.info "📤 Starting upload of #{Array(image_sources).count} images for item #{item.id}"
-  
-  Array(image_sources).each_with_index do |image_source, index|
-    purpose = purposes ? purposes[index] : "image_#{index + 1}"
+  def self.upload_item_images(item, image_sources, purposes: nil)
+    results = []
     
-    Rails.logger.info "Processing image #{index + 1}: #{image_source.respond_to?(:original_filename) ? image_source.original_filename : 'URL'}"
+    Rails.logger.info "📤 Starting upload of #{Array(image_sources).count} images for item #{item.id}"
     
-    result = upload_for_record(
-      record: item,
-      image_source: image_source,
-      attachment_name: :images,
-      purpose: purpose
-    )
+    Array(image_sources).each_with_index do |image_source, index|
+      purpose = purposes ? purposes[index] : "image_#{index + 1}"
+      
+      Rails.logger.info "Processing image #{index + 1}: #{image_source.respond_to?(:original_filename) ? image_source.original_filename : 'URL'}"
+      
+      result = upload_for_record(
+        record: item,
+        image_source: image_source,
+        attachment_name: :images,
+        purpose: purpose
+      )
+      
+      results << result
+    end
     
-    results << result
+    Rails.logger.info "✅ Completed upload: #{results.count { |r| r[:success] }} successful, #{results.count { |r| !r[:success] }} failed"
+    results
   end
-  
-  Rails.logger.info "✅ Completed upload: #{results.count { |r| r[:success] }} successful, #{results.count { |r| !r[:success] }} failed"
-  results
-end
 
   # Keep the original user method for backward compatibility
   def self.upload_user_profile(user, image_source)
@@ -170,7 +176,7 @@ end
   end
 
   # Helper method to find or create blob with caching
-  def self.find_or_create_blob(key, file, checksum, record = nil)
+  def self.find_or_create_blob(key, file, base64_checksum, record = nil, hex_checksum = nil)
     cache_key = "#{CACHE_PREFIX}/blob/#{key}"
 
     # Try to find blob in cache first
@@ -193,10 +199,16 @@ end
 
       # Prepare metadata
       metadata = {
-        'checksum' => checksum,
+        'hex_checksum' => hex_checksum,
         'uploaded_at' => Time.current.iso8601
       }
-      
+       Rails.logger.info "🔍 Attempting to create blob with:"
+      Rails.logger.info "   key: #{key}"
+      Rails.logger.info "   filename: #{filename}"
+      Rails.logger.info "   content_type: #{file.content_type || 'image/jpeg'}"
+      Rails.logger.info "   byte_size: #{file.size}"
+      Rails.logger.info "   checksum (base64): #{base64_checksum}"
+      Rails.logger.info "   checksum length: #{base64_checksum.length if base64_checksum}"
       if record
         metadata['uploaded_for_id'] = record.id.to_s
         metadata['uploaded_for_type'] = record.class.name
@@ -207,7 +219,7 @@ end
         filename: filename,
         content_type: file.content_type || 'image/jpeg',
         byte_size: file.size,
-        checksum: checksum,
+        checksum: base64_checksum,
         metadata: metadata,
         service_name: 'r2'
       )

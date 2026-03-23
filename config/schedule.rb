@@ -10,7 +10,9 @@ scheduler = Rufus::Scheduler.new
 every '*/5 * * * *' do
   runner "PaymentMonitorJob.perform_later(:payments)"
 end
-
+every 6.hours do
+  runner "WarmRecommendationsCacheJob.perform_later"
+end
 # Broader notification check every hour
 every 1.hour do
   runner "PaymentMonitorJob.perform_later(:notifications)"
