@@ -10,40 +10,43 @@ def sign_in
   is_new_user = user.new_record?
 
   if !is_new_user && user.deleted?
-    return render json: { error: "Account is deactivated. Please contact support to reactivate." }, status: :forbidden
+    return render json: { error: "Account is deactivated." }, status: :forbidden
   end
 
   if is_new_user
     user.assign_attributes(
       name: params[:name],
-      auth_mode: params[:auth_mode] || params[:auth_Mode] || "email",
+      auth_mode: params[:auth_mode] || "email",
       status: true,
       deleted: false,
       role: 'user'
     )
     
     unless user.save
-      return render json: { error: "Unable to create user", details: user.errors.full_messages }, status: :unprocessable_entity
+      return render json: { error: "Unable to create user" }, status: :unprocessable_entity
     end
     
+    # Try to upload, but don't fail if it doesn't work
     if params[:profile_picture_url].present?
-      upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
-      unless upload_result[:success]
-        Rails.logger.error "Failed to upload profile picture for new user #{user.id}: #{upload_result[:error]}"
+      begin
+        ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
+      rescue => e
+        Rails.logger.error "Profile upload failed (continuing anyway): #{e.message}"
       end
-    end
-  elsif params[:profile_picture_url].present? && !user.profile_picture.attached?
-    upload_result = ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
-    unless upload_result[:success]
-      Rails.logger.warn "Failed to upload profile picture for existing user #{user.id}: #{upload_result[:error]}"
     end
   end
 
   session = create_session_for(user)
 
-  profile_url = generate_profile_url(user) if user.profile_picture.attached?
+  # ✅ FIX: Return original Google URL if upload failed
+  profile_url = if user.profile_picture.attached?
+                  generate_profile_url(user)
+                elsif params[:profile_picture_url].present?
+                  params[:profile_picture_url]  # Return original Google URL
+                else
+                  nil
+                end
 
-  # USE THE NEW HELPER METHODS
   render json: {
     success: true,
     message: "Sign in successful",
@@ -53,12 +56,11 @@ def sign_in
       email: user.email,
       mobile: user.mobile,
       username: user.username,
-      profile_picture_url: profile_url,
+      profile_picture_url: profile_url,  # ✅ Now has URL!
       auth_mode: user.auth_mode,
       role: user.role,
       created_at: user.created_at,
       updated_at: user.updated_at,
-      # School info using helper methods
       school_mapped: user.school_mapped?,
       school_id: user.school_id,
       school_name: user.school_name
@@ -67,7 +69,6 @@ def sign_in
     timestamp: Time.now.iso8601
   }, status: :ok
 end
-
   def chat_rooms
     user_chat_rooms = @current_user.chat_rooms
     render json: { chat_rooms: user_chat_rooms.as_json(except: [:created_at, :updated_at]) }, status: :ok

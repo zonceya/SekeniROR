@@ -22,9 +22,19 @@ Rails.application.routes.draw do
       get '/categories', to: 'categories#index'
       get '/categories/:id/items', to: 'categories#items'
       
-      # Provinces & Towns for filtering
-      get '/provinces', to: 'provinces#index'
-      get '/towns', to: 'towns#index'
+      # ================================
+      # 🔍 FILTER ROUTES (NEW)
+      # ================================
+      # Filter options for product listing
+      get '/filters/options', to: 'filters#options'
+      get '/filters/categories', to: 'filters#categories'
+      get '/filters/subcategories', to: 'filters#subcategories'
+      get '/filters/genders', to: 'filters#genders'
+      get '/filters/conditions', to: 'filters#conditions'
+      get '/filters/colors', to: 'filters#colors'
+      get '/filters/sizes', to: 'filters#sizes'
+      get '/filters/brands', to: 'filters#brands'
+      get '/filters/tags', to: 'filters#tags'
       
       # ================================
       # 🏪 SHOP ROUTES
@@ -60,19 +70,30 @@ Rails.application.routes.draw do
       end
       
       # ================================
-      # 🎯 RECOMMENDATIONS ROUTES
+      # 🎯 RECOMMENDATIONS ROUTES - FIXED
       # ================================
+      # Home feed
       get 'recommendations/home', to: 'recommendations#home'
+      
+      # Uniform and Sport sections
       get 'recommendations/uniform', to: 'recommendations#uniform'
       get 'recommendations/sport', to: 'recommendations#sport'
+      
+      # Recent items (grouped or by period)
       get 'recommendations/recent', to: 'recommendations#recent'
-
+      
+      # "Show all" routes (without nested namespace)
+      get 'recommendations/recommended/all', to: 'recommendations#recommended_all'
+      get 'recommendations/essentials/all', to: 'recommendations#essentials_all'
+      get 'recommendations/trending/all', to: 'recommendations#trending_all'
+      get 'recommendations/recent/all', to: 'recommendations#recent_all'
+      
       # Tracking
       post 'recommendations/track_view', to: 'recommendations#track_view'
-      post 'recommendations/track_click', to: 'recommendations#track_click'  
+      post 'recommendations/track_click', to: 'recommendations#track_click'
       
       # ================================
-      # 📋 MASTER DATA ROUTES
+      # 📋 MASTER DATA ROUTES (EXISTING)
       # ================================
       resources :brands, only: [:index]
       resources :categories, only: [:index]
@@ -94,8 +115,10 @@ Rails.application.routes.draw do
       get 'genders', to: 'genders#index'
       get 'locations', to: 'locations#index'
       get 'all_reference_data', to: 'reference_data#index'
-      resources :brands, only: [:index]
-      resources :categories, only: [:index]
+      
+      # Provinces & Towns for filtering
+      get '/provinces', to: 'provinces#index'
+      get '/towns', to: 'towns#index'
       
       # ================================
       # 👤 USER ROUTES
