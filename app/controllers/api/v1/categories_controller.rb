@@ -2,7 +2,7 @@
 
 module Api
   module V1
-    class FiltersController < ApplicationController
+    class CategoriesController  < ApplicationController
       include Authenticatable
       
       # GET /api/v1/categories/:id/filter_config
