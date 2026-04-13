@@ -115,7 +115,8 @@ Rails.application.routes.draw do
       get 'genders', to: 'genders#index'
       get 'locations', to: 'locations#index'
       get 'all_reference_data', to: 'reference_data#index'
-      
+      get '/categories/:id/filter_config', to: 'filters#category_filter_config'
+      get '/filters/global_config', to: 'filters#global_filter_config'
       # Provinces & Towns for filtering
       get '/provinces', to: 'provinces#index'
       get '/towns', to: 'towns#index'
