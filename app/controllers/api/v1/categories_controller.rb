@@ -3,7 +3,7 @@ module Api
     class CategoriesController < ApplicationController
       include Authenticatable
       
-      # GET /api/v1/categories/:id/filter_config
+      # GET /api/v1/categories/:id/filter_config --test
       def category_filter_config
         category = MainCategory.find(params[:id])
         
