@@ -10,8 +10,10 @@ class Item < ApplicationRecord
   belongs_to :gender, optional: true
   belongs_to :main_category, optional: true
   belongs_to :sub_category, optional: true
- # ============================================
-  # EXISTING CODE (keep all your current validations and associations)
+  belongs_to :color, class_name: 'ItemColor', foreign_key: 'color_id', optional: true
+
+  # ============================================
+  # VALIDATIONS & ASSOCIATIONS
   # ============================================
   validate :validate_category_consistency
 
@@ -29,13 +31,11 @@ class Item < ApplicationRecord
   before_save :set_categories_from_item_type, if: -> { item_type_id.present? && (main_category_id.blank? || sub_category_id.blank?) }
   store_accessor :meta, :color, :size
   
-  
   # ============================================
-  # VIRTUAL ATTRIBUTES FOR MISSING COLUMNS
+  # VIRTUAL ATTRIBUTES
   # ============================================
   attr_accessor :quantity, :reserved, :size_id, :color_id
   
-  # Map virtual 'quantity' to database 'total_quantity'
   def quantity
     @quantity || self[:total_quantity] || 0
   end
@@ -45,7 +45,6 @@ class Item < ApplicationRecord
     self.total_quantity = value.to_i
   end
   
-  # Map virtual 'reserved' to database 'total_reserved'
   def reserved
     @reserved || self[:total_reserved] || 0
   end
@@ -55,29 +54,24 @@ class Item < ApplicationRecord
     self.total_reserved = value.to_i
   end
   
-  # Map virtual 'size_id' (if needed for API)
   def size_id
     @size_id || self[:size_id]
   end
   
   def size_id=(value)
     @size_id = value
-    # If you have a size association, set it
     self.size = ItemSize.find_by(id: value) if value.present?
   end
   
-  # Map virtual 'color_id' (if needed for API)
   def color_id
     @color_id || self[:color_id]
   end
   
   def color_id=(value)
     @color_id = value
-    # If you want to store color in meta
     self.meta ||= {}
     self.meta['color_id'] = value
   end
-  
  
   def available_quantity
     quantity.to_i - reserved.to_i
@@ -93,14 +87,90 @@ class Item < ApplicationRecord
     end
   end
   
+  # ============================================
+  # IMAGE METHODS (PUBLIC - BEFORE private)
+  # ============================================
+  
   def image_urls
+    return [] unless images.attached?
+    images.map { |image| generate_presigned_url(image) }
+  end
+
+ def cover_photo
+  # First check Active Storage
+  if images.attached? && images.first.present?
+    generate_presigned_url(images.first)
+  elsif self[:cover_photo].present?
+    # Fall back to database column (CDN URL)
+    self[:cover_photo]
+  else
+    nil
+  end
+end
+  def all_image_urls
+  urls = []
+  
+  # Add Active Storage images first
+  if images.attached?
+    urls += images.map { |img| generate_presigned_url(img) }
+  end
+  
+  # Add cover_photo from database if present and not already included
+  if self[:cover_photo].present? && !urls.include?(self[:cover_photo])
+    urls << self[:cover_photo]
+  end
+  
+  # Add additional_photo if present
+  if self[:additional_photo].present? && !urls.include?(self[:additional_photo])
+    urls << self[:additional_photo]
+  end
+  
+  urls
+end
+
+# For backward compatibility with existing code
+def image_urls
+  all_image_urls
+end
+  def generate_item_image_urls
     return [] unless images.attached?
     
     images.map do |image|
-      generate_image_url(image)
+      {
+        id: image.id,
+        url: generate_presigned_url(image),
+        filename: image.filename.to_s,
+        content_type: image.content_type,
+        created_at: image.created_at
+      }
     end
   end
 
+  def generate_presigned_url(image)
+    s3_client = Aws::S3::Client.new(
+      access_key_id: ENV['R2_ACCESS_KEY_ID'],
+      secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
+      endpoint: ENV['R2_ENDPOINT'],
+      region: 'auto',
+      force_path_style: true
+    )
+    
+    signer = Aws::S3::Presigner.new(client: s3_client)
+    
+    signer.presigned_url(
+      :get_object,
+      bucket: ENV['R2_BUCKET_NAME'],
+      key: image.key,
+      expires_in: 3600
+    )
+  rescue => e
+    Rails.logger.error "Failed to generate URL for image #{image.id}: #{e.message}"
+    nil
+  end
+
+  # ============================================
+  # PRIVATE METHODS
+  # ============================================
   private
   
   def validate_category_consistency
@@ -114,32 +184,10 @@ class Item < ApplicationRecord
   def set_categories_from_item_type
     self.main_category_id ||= item_type.main_category_id
     
-    # Set a default sub-category based on item_type name
     if main_category_id.present? && sub_category_id.blank?
       default_sub = main_category.sub_categories.find_by("name ILIKE ?", "%#{item_type.name}%")
       self.sub_category_id = default_sub.id if default_sub
     end
-  end
-
-  def generate_image_url(image)
-    s3_client = Aws::S3::Client.new(
-      access_key_id: ENV['R2_ACCESS_KEY_ID'],
-      secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
-      endpoint: ENV['R2_ENDPOINT'],
-      region: 'auto',
-      force_path_style: true
-    )
-    
-    signer = Aws::S3::Presigner.new(client: s3_client)
-    signer.presigned_url(
-      :get_object,
-      bucket: ENV['R2_BUCKET_NAME'],
-      key: image.key,
-      expires_in: 3600
-    )
-  rescue => e
-    Rails.logger.error "Failed to generate item image URL: #{e.message}"
-    nil
   end
   
   def non_negative_inventory
