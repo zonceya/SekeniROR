@@ -70,6 +70,8 @@ module Api
             size_id: item.size_id,
             color: item.color&.name,
             color_id: item.color_id,
+            image: item.cover_photo,  # Will now work
+            images: item.all_image_urls,
             brand: item.brand&.name,
             brand_id: item.brand_id,
             condition: item.item_condition&.name,
@@ -506,73 +508,74 @@ module Api
       end
 
       # GET /api/v1/items/:id - Public view of specific item
-    def show
-      item = Item.includes(:shop, :main_category, :sub_category, :gender, 
-                          :school, :size, :color, :province, :location, 
-                          :brand, :item_condition, :tags).find_by(id: params[:id], deleted: false)
-      
-      if item.nil?
-        return render json: { error: "Item not found" }, status: :not_found
-      end
-      
-      # 🟢 ADD THIS TRACKING CODE - Place it here
-      if item.school_id
-        begin
-          # Create recommendations controller instance
-          rec_controller = Api::V1::RecommendationsController.new
-          
-          # Pass current user context if available
-          rec_controller.instance_variable_set(:@current_user, @current_user) if @current_user
-          rec_controller.instance_variable_set(:@user_school_id, item.school_id)
-          
-          # Track the view
-          rec_controller.track_view(
-            item_id: item.id,
-            source: params[:source] || 'item_page',
-            school_id: item.school_id
-          )
-          
-          Rails.logger.info "✅ Tracked view for item #{item.id} from school #{item.school_id}"
-        rescue => e
-          # Log error but don't break the response
-          Rails.logger.error "❌ Failed to track view: #{e.message}"
-        end
-      end
-      
-      render json: {
-        success: true,
-        item: {
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          price: item.price.to_f,
-          quantity: item.quantity,
-          available_quantity: item.available_quantity,
-          status: item.status,
-          main_category: item.main_category&.as_json,
-          sub_category: item.sub_category&.as_json,
-          gender: item.gender&.as_json,
-          school: item.school&.as_json,
-          size: item.size&.as_json,
-          color: item.color&.as_json,
-          brand: item.brand&.as_json,
-          condition: item.item_condition&.as_json,
-          province: item.province&.as_json,
-          town: item.location&.as_json,
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-          shop: {
-            id: item.shop&.id,
-            name: item.shop&.name,
-            display_name: item.shop&.display_name,
-            seller_name: item.shop&.user&.name
-          },
-          images: item.images.attached? ? generate_item_image_urls(item) : [],
-          tags: item.tags.as_json
-        }
-      }
-    end
+def show
+  item = Item.includes(:shop, :main_category, :sub_category, :gender, 
+                      :school, :size, :color, :province, :location, 
+                      :brand, :item_condition, :tags).find_by(id: params[:id], deleted: false)
+  
+  if item.nil?
+    return render json: { error: "Item not found" }, status: :not_found
+  end
+  
+  render json: {
+    success: true,
+    item: {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price: item.price.to_f,
+      quantity: item.quantity,
+      available_quantity: item.available_quantity,
+      status: item.status,
+      main_category: item.main_category&.as_json,
+      sub_category: item.sub_category&.as_json,
+      gender: item.gender&.as_json,
+      school: item.school&.as_json,
+      size: item.size&.as_json,
+      color: item.color&.as_json,
+      brand: item.brand&.as_json,
+      condition: item.item_condition&.as_json,
+      province: item.province&.as_json,
+      town: item.location&.as_json,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      shop: {
+        id: item.shop&.id,
+        name: item.shop&.name,
+        display_name: item.shop&.display_name,
+        seller_name: item.shop&.user&.name,
+        seller_mobile: item.shop&.user&.mobile
+      },
+      image: item.cover_photo,  # This will work now
+      images: item.all_image_urls,  # Returns ALL images (Active Storage + CDN)
+      cover_photo: item.cover_photo,
+      tags: item.tags.as_json
+    }
+  }
+end
 
+# Add this helper method if not already present
+def generate_presigned_url(image)
+  s3_client = Aws::S3::Client.new(
+    access_key_id: ENV['R2_ACCESS_KEY_ID'],
+    secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
+    endpoint: ENV['R2_ENDPOINT'],
+    region: 'auto',
+    force_path_style: true
+  )
+  
+  signer = Aws::S3::Presigner.new(client: s3_client)
+  
+  signer.presigned_url(
+    :get_object,
+    bucket: ENV['R2_BUCKET_NAME'],
+    key: image.key,
+    expires_in: 3600
+  )
+rescue => e
+  Rails.logger.error "Failed to generate URL: #{e.message}"
+  nil
+end
       # GET /api/v1/my-shop/items - Get current user's shop items (private)
       def my_shop_items
         shop = @current_user.shop
