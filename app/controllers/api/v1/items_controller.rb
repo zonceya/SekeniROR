@@ -10,106 +10,109 @@ module Api
         :mark_as_sold, :add_images, :remove_image
       ]
       
-      # GET /api/v1/items - Public listing of all active items
-      def index
-        items = Item.where(deleted: false, status: 'active')
-        
-        # Filter by category if provided
-        if params[:main_category_id].present?
-          items = items.where(main_category_id: params[:main_category_id])
-        end
-        
-        if params[:sub_category_id].present?
-          items = items.where(sub_category_id: params[:sub_category_id])
-        end
-        
-        # Filter by other attributes
-        items = items.where(gender_id: params[:gender_id]) if params[:gender_id].present?
-        items = items.where(school_id: params[:school_id]) if params[:school_id].present?
-        items = items.where(size_id: params[:size_id]) if params[:size_id].present?
-        items = items.where(color_id: params[:color_id]) if params[:color_id].present?
-        items = items.where(province_id: params[:province_id]) if params[:province_id].present?
-        items = items.where(location_id: params[:town_id]) if params[:town_id].present?
-        items = items.where(brand_id: params[:brand_id]) if params[:brand_id].present?
-        
-        # Apply sorting
-        if params[:sort] == 'newest'
-          items = items.order(created_at: :desc)
-        elsif params[:sort] == 'price_low'
-          items = items.order(price: :asc)
-        elsif params[:sort] == 'price_high'
-          items = items.order(price: :desc)
-        else
-          items = items.order(created_at: :desc) # Default sort
-        end
-        
-        # Apply pagination/limit
-        items = items.limit(params[:limit]) if params[:limit]
-        items = items.offset(params[:offset]) if params[:offset]
-        
-        # Include shop and category details for public viewing
-        items_with_details = items.includes(:shop, :main_category, :sub_category, :gender, 
-                                           :school, :size, :color, :province, :location, :brand).map do |item|
-          {
-            id: item.id,
-            name: item.name,
-            description: item.description,
-            price: item.price.to_f,
-            quantity: item.quantity,
-            available_quantity: item.available_quantity,
-            status: item.status,
-            main_category: item.main_category&.name,
-            main_category_id: item.main_category_id,
-            sub_category: item.sub_category&.name,
-            sub_category_id: item.sub_category_id,
-            gender: item.gender&.name,
-            gender_id: item.gender_id,
-            school: item.school&.name,
-            school_id: item.school_id,
-            size: item.size&.name,
-            size_id: item.size_id,
-            color: item.color&.name,
-            color_id: item.color_id,
-            image: item.cover_photo,  # Will now work
-            images: item.all_image_urls,
-            brand: item.brand&.name,
-            brand_id: item.brand_id,
-            condition: item.item_condition&.name,
-            condition_id: item.item_condition_id,
-            province: item.province&.name,
-            province_id: item.province_id,
-            town: item.location&.name,
-            town_id: item.location_id,
-            created_at: item.created_at,
-            updated_at: item.updated_at,
-            shop: {
-              id: item.shop&.id,
-              name: item.shop&.name,
-              display_name: item.shop&.display_name,
-              seller_name: item.shop&.user&.name
-            },
-            images: item.images.attached? ? generate_item_image_urls(item) : [],
-            tags: item.tags.pluck(:name)
-          }
-        end
-        
-        render json: {
-          success: true,
-          items: items_with_details,
-          total_count: items.count,
-          filters_applied: {
-            main_category_id: params[:main_category_id],
-            sub_category_id: params[:sub_category_id],
-            gender_id: params[:gender_id],
-            school_id: params[:school_id],
-            size_id: params[:size_id],
-            color_id: params[:color_id],
-            province_id: params[:province_id],
-            town_id: params[:town_id],
-            brand_id: params[:brand_id]
-          }.compact
-        }
-      end
+def index
+  items = Item.includes(
+    :main_category, :sub_category, :gender, :school,
+    :province, :location, :brand, :item_condition, :tags,
+    shop: :user,                    # ← Add comma here
+    item_variants: [:size, :color]
+  ).where(deleted: false, status: 'active')
+
+  # SEARCH
+  if params[:q].present?
+    search_term = "%#{params[:q].downcase}%"
+    items = items.where(
+      "LOWER(name) LIKE ? OR LOWER(description) LIKE ?",
+      search_term, search_term
+    )
+  end
+
+  # FILTERS
+  items = items.where(main_category_id: params[:main_category_id]) if params[:main_category_id].present?
+  items = items.where(sub_category_id: params[:sub_category_id])   if params[:sub_category_id].present?
+  items = items.where(gender_id: params[:gender_id])               if params[:gender_id].present?
+  items = items.where(school_id: params[:school_id])               if params[:school_id].present?
+  items = items.where(province_id: params[:province_id])           if params[:province_id].present?
+  items = items.where(location_id: params[:town_id])               if params[:town_id].present?
+  items = items.where(brand_id: params[:brand_id])                 if params[:brand_id].present?
+
+  # SORTING
+  case params[:sort]
+  when 'price_low'  then items = items.order(price: :asc)
+  when 'price_high' then items = items.order(price: :desc)
+  else                   items = items.order(created_at: :desc)
+  end
+
+  # PAGINATION
+  items = items.limit(params[:limit])   if params[:limit]
+  items = items.offset(params[:offset]) if params[:offset]
+
+  # Load to array to preserve eager-loaded associations
+  loaded_items = items.to_a
+
+  items_with_details = loaded_items.map do |item|
+    # Get the primary variant (first active one)
+    primary_variant = item.item_variants.find(&:is_active?)
+    
+    {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price: item.price.to_f,
+      quantity: item.quantity,
+      available_quantity: item.available_quantity,
+      status: item.status,
+      main_category: item.main_category&.name,
+      main_category_id: item.main_category_id,
+      sub_category: item.sub_category&.name,
+      sub_category_id: item.sub_category_id,
+      gender: item.gender&.name,
+      gender_id: item.gender_id,
+      school: item.school&.name,
+      school_id: item.school_id,
+      size: primary_variant&.size&.name,
+      size_id: primary_variant&.size_id,
+      color: primary_variant&.color&.name,
+      color_id: primary_variant&.color_id,
+      image: item.cover_photo,
+      images: item.all_image_urls,
+      brand: item.brand&.name,
+      brand_id: item.brand_id,
+      condition: item.item_condition&.name,
+      condition_id: item.item_condition_id,
+      province: item.province&.name,
+      province_id: item.province_id,
+      town: item.location&.state_or_region,
+      town_id: item.location_id,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      shop: {
+        id: item.shop&.id,
+        name: item.shop&.name,
+        display_name: item.shop&.display_name,
+        seller_name: item.shop&.user&.name,
+        seller_mobile: item.shop&.user&.mobile
+      },
+      tags: item.tags.map(&:name)
+    }
+  end
+
+  render json: {
+    success: true,
+    items: items_with_details,
+    total_count: loaded_items.size,
+    filters_applied: {
+      q: params[:q],
+      main_category_id: params[:main_category_id],
+      sub_category_id: params[:sub_category_id],
+      gender_id: params[:gender_id],
+      school_id: params[:school_id],
+      province_id: params[:province_id],
+      town_id: params[:town_id],
+      brand_id: params[:brand_id]
+    }.compact
+  }
+end
 
       # POST /api/v1/items - Add item to current user's shop
       def createItems
@@ -508,14 +511,19 @@ module Api
       end
 
       # GET /api/v1/items/:id - Public view of specific item
+
 def show
   item = Item.includes(:shop, :main_category, :sub_category, :gender, 
-                      :school, :size, :color, :province, :location, 
-                      :brand, :item_condition, :tags).find_by(id: params[:id], deleted: false)
+                      :school, :province, :location, 
+                      :brand, :item_condition, :tags, 
+                      item_variants: [:size, :color, :condition]) 
+            .find_by(id: params[:id], deleted: false)
   
   if item.nil?
     return render json: { error: "Item not found" }, status: :not_found
   end
+  
+  primary_variant = item.item_variants.where(is_active: true).first
   
   render json: {
     success: true,
@@ -531,10 +539,10 @@ def show
       sub_category: item.sub_category&.as_json,
       gender: item.gender&.as_json,
       school: item.school&.as_json,
-      size: item.size&.as_json,
-      color: item.color&.as_json,
+      size: primary_variant&.size&.as_json || item.size&.as_json,
+      color: primary_variant&.color&.as_json || item.color&.as_json,
+      condition: primary_variant&.condition&.as_json || item.item_condition&.as_json,
       brand: item.brand&.as_json,
-      condition: item.item_condition&.as_json,
       province: item.province&.as_json,
       town: item.location&.as_json,
       created_at: item.created_at,
@@ -546,14 +554,27 @@ def show
         seller_name: item.shop&.user&.name,
         seller_mobile: item.shop&.user&.mobile
       },
-      image: item.cover_photo,  # This will work now
-      images: item.all_image_urls,  # Returns ALL images (Active Storage + CDN)
       cover_photo: item.cover_photo,
-      tags: item.tags.as_json
+      # ✅ FIXED: Use all_image_urls like recommendations endpoint
+      images: item.all_image_urls,  # ← This returns all 3 images!
+      tags: item.tags.as_json,
+      variants: item.item_variants.where(is_active: true).map do |variant|
+        {
+          id: variant.id,
+          size_id: variant.size_id,
+          size_name: variant.size&.name,
+          color_id: variant.color_id,
+          color_name: variant.color&.name,
+          condition_id: variant.condition_id,
+          condition_name: variant.condition&.name,
+          price: variant.price.to_f,
+          quantity: variant.quantity,
+          is_active: variant.is_active
+        }
+      end
     }
   }
 end
-
 # Add this helper method if not already present
 def generate_presigned_url(image)
   s3_client = Aws::S3::Client.new(
@@ -642,23 +663,34 @@ end
         render json: items
       end
 
-     def viewShopItem
-     render json: {
-        success: true,
-        item: @item.as_json(
-         include: {
-        shop: { only: [:id, :name] },
-        main_category: { only: [:id, :name] },
-        sub_category: { only: [:id, :name] },
-        gender: { only: [:id, :name] },
-        school: { only: [:id, :name] },
-        province: { only: [:id, :name] },
-        brand: { only: [:id, :name] },
-        tags: { only: [:id, :name] }
-      }
-    ).merge(
+def viewShopItem
+  render json: {
+    success: true,
+    item: {
+      id: @item.id,
+      name: @item.name,
+      description: @item.description,
+      price: @item.price,
+      status: @item.status,
+      created_at: @item.created_at,
+      updated_at: @item.updated_at,
+      
+      shop: {
+        id: @item.shop.id,
+        name: @item.shop.name,
+        seller_name: @item.shop.user.name,
+        seller_mobile: @item.shop.user.mobile   
+      },
+      
+      main_category: { id: @item.main_category&.id, name: @item.main_category&.name },
+      sub_category: { id: @item.sub_category&.id, name: @item.sub_category&.name },
+      gender: { id: @item.gender&.id, name: @item.gender&.name },
+      school: { id: @item.school&.id, name: @item.school&.name },
+      province: { id: @item.province&.id, name: @item.province&.name },
+      brand: { id: @item.brand&.id, name: @item.brand&.name },
+      tags: @item.tags.map { |tag| { id: tag.id, name: tag.name } },
       images: @item.images.attached? ? generate_item_image_urls(@item) : []
-    )
+    }
   }
 end
 

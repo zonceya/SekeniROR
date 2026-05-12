@@ -7,3 +7,9 @@ db/schema.rb linguist-generated
 vendor/* linguist-vendored
 config/credentials/*.yml.enc diff=rails_credentials
 config/credentials.yml.enc diff=rails_credentials
+# C:/WorkSpace/SekeniROR/.env
+SMTP_USERNAME=admin@skoolswap.com
+SMTP_PASSWORD=your_16_digit_app_password_here
+SMTP_ADDRESS=smtp.gmail.com
+SMTP_PORT=587
+SMTP_DOMAIN=gmail.com

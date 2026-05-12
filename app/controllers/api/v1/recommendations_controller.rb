@@ -63,10 +63,12 @@ module Api
         
         render json: feed
       end
+      
       def recommended_all
         school_id = params[:school_id] || @user_school_id
         page = params[:page] || 1
         per_page = params[:per_page] || 20
+        period = params[:period] || 'all'
         
         return render json: { success: false, error: "School ID required" }, status: :bad_request unless school_id
         
@@ -85,26 +87,25 @@ module Api
           excluded_ids = (viewed_ids + favorited_ids + purchased_ids).uniq.first(50)
           
           if preferred_categories.any?
-            # Get paginated items
+            # Get paginated items with time filter
             items = Item.where(school_id: school_id)
                         .where(main_category_id: preferred_categories)
                         .where(deleted: false, status: 'active')
                         .where.not(id: excluded_ids)
-                        .order(created_at: :desc)
-                        .page(page)
-                        .per(per_page)
+            
+            items = apply_time_filter(items, period)
+            items = items.order(created_at: :desc).page(page).per(per_page)
             
             if items.present?
               return render_paginated_items(items, "Recommended for you", page, per_page)
             elsif nearby_ids.any?
-              # Supplement with nearby
               items = Item.where(school_id: nearby_ids)
                          .where(main_category_id: preferred_categories)
                          .where(deleted: false, status: 'active')
                          .where.not(id: excluded_ids)
-                         .order(created_at: :desc)
-                         .page(page)
-                         .per(per_page)
+              
+              items = apply_time_filter(items, period)
+              items = items.order(created_at: :desc).page(page).per(per_page)
               
               if items.present?
                 return render_paginated_items(items, "From nearby schools", page, per_page)
@@ -114,13 +115,13 @@ module Api
         end
         
         # Fallback to popular
-        items = popular_items_paginated(school_id, nearby_ids, page, per_page)
+        items = popular_items_paginated(school_id, nearby_ids, page, per_page, period)
         render_paginated_items(items, "Popular items", page, per_page)
       end
 
-        def essentials_all
+      def essentials_all
         school_id = params[:school_id] || @user_school_id
-        category = params[:category] # 'uniforms', 'sports', 'accessories'
+        category = params[:category]
         page = params[:page] || 1
         per_page = params[:per_page] || 20
         
@@ -135,14 +136,11 @@ module Api
         }
         
         if category.present? && category_map[category].present?
-          # Single category view
           items = get_category_items_paginated(school_id, nearby_ids, category_map[category], page, per_page)
           title = "#{category.capitalize} Essentials"
           render_paginated_items(items, title, page, per_page)
         else
-          # All essentials view
           all_items = []
-          
           category_map.each do |cat_name, cat_ids|
             cat_items = get_category_items_paginated(school_id, nearby_ids, cat_ids, 1, 6)
             all_items << {
@@ -160,9 +158,9 @@ module Api
         end
       end
 
-        def trending_all
+      def trending_all
         school_id = params[:school_id] || @user_school_id
-        period = params[:period] || 'today' # today, week, month
+        period = params[:period] || 'today'
         page = params[:page] || 1
         per_page = params[:per_page] || 20
         
@@ -170,50 +168,36 @@ module Api
         
         nearby_ids = find_nearby_schools(school_id)
         
-        # Try Redis trending first
         redis_key = "school:#{school_id}:trending:#{period}"
         trending_ids = $redis.zrevrange(redis_key, 0, 99)
         
         if trending_ids.any?
-          items = Item.where(id: trending_ids)
-                      .where(deleted: false, status: 'active')
-                      .page(page)
-                      .per(per_page)
+          items = Item.where(id: trending_ids).where(deleted: false, status: 'active')
+          items = apply_time_filter(items, period) if period != 'today'
+          items = items.page(page).per(per_page)
           
           if items.present?
             return render_paginated_items(items, "Trending #{period}", page, per_page)
           end
         end
         
-        # Fallback to database popularity
         case period
-        when 'today'
-          days = 1
-        when 'week'
-          days = 7
-        when 'month'
-          days = 30
-        else
-          days = 1
+        when 'today' then days = 1
+        when 'week' then days = 7
+        when 'month' then days = 30
+        else days = 1
         end
         
         popular_ids = UserItemView.popular_in_school(school_id, 50, days)
         
-        items = Item.where(id: popular_ids)
-                    .where(deleted: false, status: 'active')
-                    .page(page)
-                    .per(per_page)
+        items = Item.where(id: popular_ids).where(deleted: false, status: 'active')
+        items = items.page(page).per(per_page)
         
         if items.present?
           render_paginated_items(items, "Trending #{period}", page, per_page)
         elsif nearby_ids.any?
-          # Fallback to nearby
-          items = Item.where(school_id: nearby_ids)
-                      .where(deleted: false, status: 'active')
-                      .order(created_at: :desc)
-                      .page(page)
-                      .per(per_page)
-          
+          items = Item.where(school_id: nearby_ids).where(deleted: false, status: 'active')
+          items = items.order(created_at: :desc).page(page).per(per_page)
           render_paginated_items(items, "Trending near you", page, per_page)
         else
           render json: {
@@ -228,9 +212,9 @@ module Api
         end
       end
       
-           def recent_all
+      def recent_all
         school_id = params[:school_id] || @user_school_id
-        period = params[:period] # today, yesterday, week, all
+        period = params[:period]
         page = params[:page] || 1
         per_page = params[:per_page] || 20
         
@@ -245,7 +229,7 @@ module Api
           get_recent_by_timeframe(school_id, nearby_ids, 1.day.ago.beginning_of_day, 1.day.ago.end_of_day)
         when 'week'
           get_recent_by_timeframe(school_id, nearby_ids, 7.days.ago, nil)
-        else # 'all' or nil
+        else
           get_recent_by_timeframe(school_id, nearby_ids, nil, nil)
         end
         
@@ -271,7 +255,6 @@ module Api
         uniform_cat = MainCategory.where(name: ['Uniform', 'School Wear', 'Uniforms']).pluck(:id)
         nearby_ids = find_nearby_schools(school_id)
         
-        # Build uniform sections with fallback
         sections = build_uniform_sections(school_id, nearby_ids, uniform_cat, gender)
         
         render json: {
@@ -292,7 +275,6 @@ module Api
         sport_cat = MainCategory.where(name: ['Sport', 'Sports', 'Sports Gear']).pluck(:id)
         nearby_ids = find_nearby_schools(school_id)
         
-        # Build sport sections with fallback
         sections = build_sport_sections(school_id, nearby_ids, sport_cat, sport_type)
         
         render json: {
@@ -312,7 +294,6 @@ module Api
         nearby_ids = find_nearby_schools(school_id)
         
         if period.present?
-          # Single period view
           items = get_recent_items_by_period(school_id, nearby_ids, period)
           title = period_title(period)
           
@@ -324,7 +305,6 @@ module Api
             items: items
           }
         else
-          # Multi-period view
           sections = [
             {
               title: "Today",
@@ -362,7 +342,6 @@ module Api
         
         school_id = @user_school_id || params[:school_id]
         
-        # Save to database
         UserItemView.track(
           @current_user&.id,
           item_id,
@@ -371,14 +350,12 @@ module Api
           session.id
         )
         
-        # Update Redis for trending
         begin
           if school_id && defined?($redis) && $redis
             $redis.zincrby("school:#{school_id}:trending:today", 1, item_id)
             $redis.zincrby("school:#{school_id}:trending:week", 1, item_id)
             
             if @current_user && school_id
-              
               $redis.del("school:#{school_id}:home:#{@current_user.id}")
             end
           end
@@ -419,124 +396,103 @@ module Api
         end
       end
       
-      # ============ HELPER METHODS ============
-      
       def find_nearby_schools(school_id)
         school = School.find_by(id: school_id)
         return [] unless school
         
-        nearby_ids = School.where(province_id: school.province_id)
-                          .where.not(id: school_id)
-                          .limit(10)
-                          .pluck(:id)
-        
-        if nearby_ids.empty? && school.location_id
-          nearby_ids = School.where(location_id: school.location_id)
-                            .where.not(id: school_id)
-                            .limit(10)
-                            .pluck(:id)
+        if school.location_id
+          nearby = School.where(location_id: school.location_id)
+                        .where.not(id: school_id)
+                        .limit(10)
+                        .pluck(:id)
+          return nearby if nearby.any?
         end
         
-        nearby_ids
+        if school.province_id
+          nearby = School.where(province_id: school.province_id)
+                        .where.not(id: school_id)
+                        .limit(10)
+                        .pluck(:id)
+          return nearby if nearby.any?
+        end
+        
+        School.where.not(id: school_id).limit(10).pluck(:id)
       end
       
-      # ============ RECOMMENDED SECTION ============
+      def apply_time_filter(items, period)
+        case period
+        when 'today'
+          items.where('created_at >= ?', Time.current.beginning_of_day)
+        when 'week'
+          items.where('created_at >= ?', 7.days.ago)
+        when 'month'
+          items.where('created_at >= ?', 30.days.ago)
+        else
+          items
+        end
+      end
       
       def recommended_items_with_fallback(school_id, nearby_ids)
-  # TEMPORARY: Force nearby_ids to empty to only show current school
-  nearby_ids = []  # ← ADD THIS LINE
-  
-  return popular_with_fallback(school_id, nearby_ids) unless @current_user
-  
-  preferred_categories = UserItemView.user_preferred_categories(@current_user.id)
-  
-  viewed_ids = UserItemView.where(user_id: @current_user.id)
-                           .recent
-                           .pluck(:item_id)
-  
-  favorited_ids = Favorite.where(user_id: @current_user.id).pluck(:item_id)
-  purchased_ids = PurchaseHistory.where(user_id: @current_user.id).pluck(:item_id)
-  
-  excluded_ids = (viewed_ids + favorited_ids + purchased_ids).uniq.first(50)
-  
-  if preferred_categories.any?
-    # Try current school first
-    items = Item.where(school_id: school_id)
-                .where(main_category_id: preferred_categories)
-                .where(deleted: false, status: 'active')
-                .where.not(id: excluded_ids)
-                .order(created_at: :desc)
-                .limit(12)
-    
-    if items.count >= 4
-      return format_items(items, "Based on your interests")
-    elsif nearby_ids.any?  # This will now be false since nearby_ids = []
-      # Supplement with nearby
-      needed = 12 - items.count
-      nearby_items = Item.where(school_id: nearby_ids)
-                         .where(main_category_id: preferred_categories)
-                         .where(deleted: false, status: 'active')
-                         .where.not(id: excluded_ids)
-                         .order(created_at: :desc)
-                         .limit(needed)
-      
-      all_items = items + nearby_items
-      reason = items.any? ? "Recommended for you" : "From nearby schools"
-      return format_items(all_items, reason) if all_items.any?
-    end
-  end
-  
-  # Fallback to popular (will now only use current school because nearby_ids = [])
-  popular_with_fallback(school_id, nearby_ids)
-end
+        return popular_with_fallback(school_id, nearby_ids) unless @current_user
+        
+        preferred_categories = UserItemView.user_preferred_categories(@current_user.id)
+        
+        viewed_ids = UserItemView.where(user_id: @current_user.id).recent.pluck(:item_id)
+        favorited_ids = Favorite.where(user_id: @current_user.id).pluck(:item_id)
+        purchased_ids = PurchaseHistory.where(user_id: @current_user.id).pluck(:item_id)
+        
+        excluded_ids = (viewed_ids + favorited_ids + purchased_ids).compact.uniq.first(50)
+        
+        if preferred_categories.any?
+          items = Item.where(school_id: school_id)
+                      .where(main_category_id: preferred_categories)
+                      .where(deleted: false, status: 'active')
+                      .where.not(id: excluded_ids)
+                      .order(created_at: :desc)
+                      .limit(12)
+                      .to_a
+          
+          if items.count >= 4
+            return format_items(items, "Based on your interests")
+          elsif nearby_ids.any?
+            needed = 12 - items.count
+            nearby_items = Item.where(school_id: nearby_ids)
+                               .where(main_category_id: preferred_categories)
+                               .where(deleted: false, status: 'active')
+                               .where.not(id: excluded_ids)
+                               .order(created_at: :desc)
+                               .limit(needed)
+                               .to_a
+            
+            all_items = items + nearby_items
+            reason = items.any? ? "Recommended for you" : "From nearby schools"
+            return format_items(all_items, reason) if all_items.any?
+          end
+        end
+        
+        popular_with_fallback(school_id, nearby_ids)
+      end
       
       def popular_with_fallback(school_id, nearby_ids)
-  # TEMPORARY: Force nearby_ids to empty
-  nearby_ids = []  # ← ADD THIS LINE
-  
-  # Try current school first
-  popular_ids = UserItemView.popular_in_school(school_id, 20)
-  
-  favorite_ids = Favorite.joins(:item)
-                        .where(items: { school_id: school_id })
-                        .group(:item_id)
-                        .order(Arel.sql('COUNT(*) DESC'))
-                        .limit(10)
-                        .pluck(:item_id)
-  
-  purchase_ids = PurchaseHistory.joins(:item)
-                               .where(items: { school_id: school_id })
-                               .group(:item_id)
-                               .order(Arel.sql('COUNT(*) DESC'))
-                               .limit(10)
-                               .pluck(:item_id)
-  
-  all_popular_ids = (popular_ids + favorite_ids + purchase_ids).uniq.first(20)
-  
-  items = Item.where(id: all_popular_ids)
-              .where(deleted: false, status: 'active')
-              .limit(12)
-  
-  if items.any?
-    format_items(items, "Popular at your school")
-  elsif nearby_ids.any?  # This will now be false
-    # Fallback to nearby
-    nearby_items = Item.where(school_id: nearby_ids)
-                       .where(deleted: false, status: 'active')
-                       .order(created_at: :desc)
-                       .limit(12)
-    format_items(nearby_items, "Popular near you")
-  else
-    # Ultimate fallback - all items from current school
-    Item.where(school_id: school_id)
-        .where(deleted: false, status: 'active')
-        .order(created_at: :desc)
-        .limit(12)
-        .then { |items| format_items(items, "Items at your school") }
-  end
-end
-      
-      # ============ ESSENTIALS SECTION ============
+        popular_ids = UserItemView.popular_in_school(school_id, 20)
+        favorite_ids = Favorite.joins(:item).where(items: { school_id: school_id }).group(:item_id).order(Arel.sql('COUNT(*) DESC')).limit(10).pluck(:item_id)
+        purchase_ids = PurchaseHistory.joins(:item).where(items: { school_id: school_id }).group(:item_id).order(Arel.sql('COUNT(*) DESC')).limit(10).pluck(:item_id)
+        
+        all_popular_ids = (popular_ids + favorite_ids + purchase_ids).compact.uniq.first(20)
+        
+        if all_popular_ids.any?
+          items = Item.where(id: all_popular_ids).where(deleted: false, status: 'active').limit(12).to_a
+          return format_items(items, "Popular at your school") if items.any?
+        end
+        
+        if nearby_ids.any?
+          nearby_items = Item.where(school_id: nearby_ids).where(deleted: false, status: 'active').order(created_at: :desc).limit(12).to_a
+          return format_items(nearby_items, "Popular near you") if nearby_items.any?
+        end
+        
+        items = Item.where(school_id: school_id).where(deleted: false, status: 'active').order(created_at: :desc).limit(12).to_a
+        format_items(items, "Items at your school")
+      end
       
       def school_essentials_with_fallback(school_id, nearby_ids)
         uniform_cat = MainCategory.where(name: ['Uniform', 'School Wear', 'Uniforms']).pluck(:id)
@@ -551,82 +507,63 @@ end
       end
       
       def get_category_items(school_id, nearby_ids, category_ids, category_name)
-        # Try current school first
         school_items = Item.where(school_id: school_id, main_category_id: category_ids)
                            .where(deleted: false, status: 'active')
                            .order(created_at: :desc)
                            .limit(6)
+                           .to_a
         
         if school_items.any?
           format_items(school_items, "School #{category_name}")
         elsif nearby_ids.any?
-          # Try nearby schools
           nearby_items = Item.where(school_id: nearby_ids, main_category_id: category_ids)
                              .where(deleted: false, status: 'active')
                              .order(created_at: :desc)
                              .limit(6)
-          
-          if nearby_items.any?
-            format_items(nearby_items, "Nearby #{category_name}")
-          else
-            # No items anywhere
-            []
-          end
+                             .to_a
+          format_items(nearby_items, "Nearby #{category_name}") if nearby_items.any?
         else
-          # No nearby schools
           []
         end
       end
       
-      # ============ TRENDING SECTION ============
-      
       def trending_items_with_fallback(school_id, nearby_ids)
-  # TEMPORARY: Force nearby_ids to empty to only show current school
-  nearby_ids = []  # ← ADD THIS LINE
-  
-  # Try Redis trending first
-  trending_ids = $redis.zrevrange("school:#{school_id}:trending:today", 0, 14)
-  
-  if trending_ids.any?
-    items = Item.where(id: trending_ids).where(deleted: false, status: 'active')
-    if items.any?
-      return format_items(items, "Trending today at your school")
-    end
-  end
-  
-  # Try popular at school
-  popular_ids = UserItemView.popular_in_school(school_id, 15, 2)
-  items = Item.where(id: popular_ids).where(deleted: false, status: 'active')
-  
-  if items.any?
-    return format_items(items, "Trending at your school")
-  elsif nearby_ids.any?  # This will now be false since nearby_ids = []
-    # Fallback to nearby
-    nearby_items = Item.where(school_id: nearby_ids)
-                       .where(deleted: false, status: 'active')
-                       .order(created_at: :desc)
-                       .limit(10)
-    
-    if nearby_items.any?
-      return format_items(nearby_items, "Trending near you")
-    end
-  end
-  
-  # Ultimate fallback - show all items from current school
-  Item.where(school_id: school_id)
-      .where(deleted: false, status: 'active')
-      .order(created_at: :desc)
-      .limit(12)
-      .then { |items| format_items(items, "Latest at your school") }
-end
-      
-      # ============ RECENT SECTION ============
+        trending_ids = $redis.zrevrange("school:#{school_id}:trending:today", 0, 14)
+        
+        if trending_ids.any?
+          items = Item.where(id: trending_ids).where(deleted: false, status: 'active').to_a
+          return format_items(items, "Trending today at your school") if items.any?
+        end
+        
+        popular_ids = UserItemView.popular_in_school(school_id, 15, 2)
+        items = Item.where(id: popular_ids).where(deleted: false, status: 'active').to_a
+        
+        if items.any?
+          return format_items(items, "Trending at your school")
+        elsif nearby_ids.any?
+          nearby_items = Item.where(school_id: nearby_ids)
+                             .where(deleted: false, status: 'active')
+                             .order(created_at: :desc)
+                             .limit(10)
+                             .to_a
+          return format_items(nearby_items, "Trending near you") if nearby_items.any?
+        end
+        
+        items = Item.where(school_id: school_id)
+                    .where(deleted: false, status: 'active')
+                    .order(created_at: :desc)
+                    .limit(12)
+                    .to_a
+        
+        format_items(items, "Latest at your school")
+      end
       
       def recent_items_with_fallback(school_id, nearby_ids)
         items = Item.where(school_id: school_id)
                     .where(deleted: false, status: 'active')
                     .order(created_at: :desc)
                     .limit(10)
+                    .to_a
         
         if items.any?
           format_items(items, "Just added at your school")
@@ -635,12 +572,8 @@ end
                              .where(deleted: false, status: 'active')
                              .order(created_at: :desc)
                              .limit(10)
-          
-          if nearby_items.any?
-            format_items(nearby_items, "Recent from nearby schools")
-          else
-            []
-          end
+                             .to_a
+          format_items(nearby_items, "Recent from nearby schools") if nearby_items.any?
         else
           []
         end
@@ -650,7 +583,6 @@ end
         case period
         when 'today'
           start_time = Time.now.beginning_of_day
-          title = "Added Today"
         when 'yesterday'
           start_time = 1.day.ago.beginning_of_day
           end_time = 1.day.ago.end_of_day
@@ -660,9 +592,7 @@ end
           return []
         end
         
-        # Try current school first
-        items = Item.where(school_id: school_id)
-                    .where(deleted: false, status: 'active')
+        items = Item.where(school_id: school_id).where(deleted: false, status: 'active')
         
         if period == 'yesterday'
           items = items.where(created_at: start_time..end_time)
@@ -670,14 +600,12 @@ end
           items = items.where('created_at > ?', start_time)
         end
         
-        items = items.order(created_at: :desc).limit(10)
+        items = items.order(created_at: :desc).limit(10).to_a
         
         if items.any?
           format_items(items, period == 'today' ? "Added today at your school" : "Added #{period} at your school")
         elsif nearby_ids.any?
-          # Fallback to nearby
-          nearby_items = Item.where(school_id: nearby_ids)
-                             .where(deleted: false, status: 'active')
+          nearby_items = Item.where(school_id: nearby_ids).where(deleted: false, status: 'active')
           
           if period == 'yesterday'
             nearby_items = nearby_items.where(created_at: start_time..end_time)
@@ -685,7 +613,7 @@ end
             nearby_items = nearby_items.where('created_at > ?', start_time)
           end
           
-          nearby_items = nearby_items.order(created_at: :desc).limit(10)
+          nearby_items = nearby_items.order(created_at: :desc).limit(10).to_a
           
           if nearby_items.any?
             format_items(nearby_items, period == 'today' ? "Added today near you" : "Added #{period} near you")
@@ -706,139 +634,107 @@ end
         end
       end
       
-
-# ============ MISSING PAGINATION HELPERS ============
-
-def popular_items_paginated(school_id, nearby_ids, page, per_page)
-  # Try current school first
-  popular_ids = UserItemView.popular_in_school(school_id, 50)
-  
-  favorite_ids = Favorite.joins(:item)
-                        .where(items: { school_id: school_id })
-                        .group(:item_id)
-                        .order(Arel.sql('COUNT(*) DESC'))
-                        .limit(30)
-                        .pluck(:item_id)
-  
-  purchase_ids = PurchaseHistory.joins(:item)
-                               .where(items: { school_id: school_id })
-                               .group(:item_id)
-                               .order(Arel.sql('COUNT(*) DESC'))
-                               .limit(30)
-                               .pluck(:item_id)
-  
-  all_popular_ids = (popular_ids + favorite_ids + purchase_ids).uniq
-  
-  items = Item.where(id: all_popular_ids)
+      def popular_items_paginated(school_id, nearby_ids, page, per_page, period = 'all')
+        popular_ids = UserItemView.popular_in_school(school_id, 50)
+        favorite_ids = Favorite.joins(:item).where(items: { school_id: school_id }).group(:item_id).order(Arel.sql('COUNT(*) DESC')).limit(30).pluck(:item_id)
+        purchase_ids = PurchaseHistory.joins(:item).where(items: { school_id: school_id }).group(:item_id).order(Arel.sql('COUNT(*) DESC')).limit(30).pluck(:item_id)
+        
+        all_popular_ids = (popular_ids + favorite_ids + purchase_ids).compact.uniq
+        
+        items = Item.where(id: all_popular_ids).where(deleted: false, status: 'active')
+        items = apply_time_filter(items, period)
+        items = items.order(created_at: :desc).page(page).per(per_page)
+        
+        if items.present?
+          items
+        elsif nearby_ids.any?
+          nearby_items = Item.where(school_id: nearby_ids).where(deleted: false, status: 'active')
+          nearby_items = apply_time_filter(nearby_items, period)
+          nearby_items.order(created_at: :desc).page(page).per(per_page)
+        else
+          all_items = Item.where(deleted: false, status: 'active')
+          all_items = apply_time_filter(all_items, period)
+          all_items.order(created_at: :desc).page(page).per(per_page)
+        end
+      end
+      
+      def get_category_items_paginated(school_id, nearby_ids, category_ids, page, per_page)
+        items = Item.where(school_id: school_id, main_category_id: category_ids)
+                    .where(deleted: false, status: 'active')
+                    .order(created_at: :desc)
+                    .page(page)
+                    .per(per_page)
+        
+        if items.present?
+          items
+        elsif nearby_ids.any?
+          Item.where(school_id: nearby_ids, main_category_id: category_ids)
               .where(deleted: false, status: 'active')
               .order(created_at: :desc)
               .page(page)
               .per(per_page)
-  
-  if items.present?
-    items
-  elsif nearby_ids.any?
-    # Fallback to nearby schools
-    Item.where(school_id: nearby_ids)
-        .where(deleted: false, status: 'active')
-        .order(created_at: :desc)
-        .page(page)
-        .per(per_page)
-  else
-    # Ultimate fallback - all active items
-    Item.where(deleted: false, status: 'active')
-        .order(created_at: :desc)
-        .page(page)
-        .per(per_page)
-  end
-end
-
-def get_category_items_paginated(school_id, nearby_ids, category_ids, page, per_page)
-  # Try current school first
-  items = Item.where(school_id: school_id, main_category_id: category_ids)
+        else
+          Item.where(main_category_id: category_ids)
               .where(deleted: false, status: 'active')
               .order(created_at: :desc)
               .page(page)
               .per(per_page)
-  
-  if items.present?
-    items
-  elsif nearby_ids.any?
-    # Try nearby schools
-    Item.where(school_id: nearby_ids, main_category_id: category_ids)
-        .where(deleted: false, status: 'active')
-        .order(created_at: :desc)
-        .page(page)
-        .per(per_page)
-  else
-    # Try any school
-    Item.where(main_category_id: category_ids)
-        .where(deleted: false, status: 'active')
-        .order(created_at: :desc)
-        .page(page)
-        .per(per_page)
-  end
-end
-
-def get_recent_by_timeframe(school_id, nearby_ids, start_time, end_time)
-  base_query = Item.where(deleted: false, status: 'active')
-  
-  # Try current school first
-  items = base_query.where(school_id: school_id)
-  
-  if start_time.present? && end_time.present?
-    items = items.where(created_at: start_time..end_time)
-  elsif start_time.present?
-    items = items.where('created_at > ?', start_time)
-  end
-  
-  items = items.order(created_at: :desc)
-  
-  if items.exists?
-    items
-  elsif nearby_ids.any?
-    # Try nearby schools
-    nearby_items = base_query.where(school_id: nearby_ids)
-    
-    if start_time.present? && end_time.present?
-      nearby_items = nearby_items.where(created_at: start_time..end_time)
-    elsif start_time.present?
-      nearby_items = nearby_items.where('created_at > ?', start_time)
-    end
-    
-    nearby_items.order(created_at: :desc)
-  else
-    # Try any school
-    any_items = base_query
-    
-    if start_time.present? && end_time.present?
-      any_items = any_items.where(created_at: start_time..end_time)
-    elsif start_time.present?
-      any_items = any_items.where('created_at > ?', start_time)
-    end
-    
-    any_items.order(created_at: :desc)
-  end
-end
-
-def render_paginated_items(items, title, page, per_page)
-  render json: {
-    success: true,
-    title: title,
-    items: format_items(items),
-    pagination: {
-      current_page: items.current_page,
-      total_pages: items.total_pages,
-      total_count: items.total_count,
-      per_page: items.limit_value
-    }
-  }
-end
-      # ============ UNIFORM SECTION ============
+        end
+      end
+      
+      def get_recent_by_timeframe(school_id, nearby_ids, start_time, end_time)
+        base_query = Item.where(deleted: false, status: 'active')
+        items = base_query.where(school_id: school_id)
+        
+        if start_time.present? && end_time.present?
+          items = items.where(created_at: start_time..end_time)
+        elsif start_time.present?
+          items = items.where('created_at > ?', start_time)
+        end
+        
+        items = items.order(created_at: :desc)
+        
+        if items.exists?
+          items
+        elsif nearby_ids.any?
+          nearby_items = base_query.where(school_id: nearby_ids)
+          
+          if start_time.present? && end_time.present?
+            nearby_items = nearby_items.where(created_at: start_time..end_time)
+          elsif start_time.present?
+            nearby_items = nearby_items.where('created_at > ?', start_time)
+          end
+          
+          nearby_items.order(created_at: :desc)
+        else
+          any_items = base_query
+          
+          if start_time.present? && end_time.present?
+            any_items = any_items.where(created_at: start_time..end_time)
+          elsif start_time.present?
+            any_items = any_items.where('created_at > ?', start_time)
+          end
+          
+          any_items.order(created_at: :desc)
+        end
+      end
+      
+      def render_paginated_items(items, title, page, per_page)
+        render json: {
+          success: true,
+          title: title,
+          items: format_items(items),
+          pagination: {
+            current_page: items.current_page,
+            total_pages: items.total_pages,
+            total_count: items.total_count,
+            per_page: items.limit_value
+          }
+        }
+      end
       
       def build_uniform_sections(school_id, nearby_ids, uniform_cat, gender)
-        base_query = Item.where(main_category_id: uniform_cat)
-                         .where(deleted: false, status: 'active')
+        base_query = Item.where(main_category_id: uniform_cat).where(deleted: false, status: 'active')
         
         if gender.present? && gender != 'all'
           gender_id = Gender.find_by(name: gender.capitalize)&.id
@@ -846,82 +742,38 @@ end
         end
         
         sections = [
-          {
-            title: "Summer Uniform",
-            type: "summer",
-            items: get_uniform_subcategory(base_query, school_id, nearby_ids, ['summer'])
-          },
-          {
-            title: "Winter Uniform",
-            type: "winter",
-            items: get_uniform_subcategory(base_query, school_id, nearby_ids, ['winter'])
-          },
-          {
-            title: "PE Kit",
-            type: "pe_kit",
-            items: get_uniform_subcategory(base_query, school_id, nearby_ids, ['pe', 'sport', 'gym'])
-          },
-          {
-            title: "Accessories",
-            type: "accessories",
-            items: get_uniform_subcategory(base_query, school_id, nearby_ids, ['tie', 'hat', 'sock', 'belt', 'badge'])
-          }
+          { title: "Summer Uniform", type: "summer", items: get_uniform_subcategory(base_query, school_id, nearby_ids, ['summer']) },
+          { title: "Winter Uniform", type: "winter", items: get_uniform_subcategory(base_query, school_id, nearby_ids, ['winter']) },
+          { title: "PE Kit", type: "pe_kit", items: get_uniform_subcategory(base_query, school_id, nearby_ids, ['pe', 'sport', 'gym']) },
+          { title: "Accessories", type: "accessories", items: get_uniform_subcategory(base_query, school_id, nearby_ids, ['tie', 'hat', 'sock', 'belt', 'badge']) }
         ]
         
         sections.select { |s| s[:items].any? }
       end
       
       def get_uniform_subcategory(base_query, school_id, nearby_ids, keywords)
-        # Build search condition
         condition = keywords.map { |k| "name ILIKE '%#{k}%' OR description ILIKE '%#{k}%'" }.join(' OR ')
         
-        # Try current school first
-        school_items = base_query.where(school_id: school_id)
-                                 .where(condition)
-                                 .limit(8)
+        school_items = base_query.where(school_id: school_id).where(condition).limit(8).to_a
         
         if school_items.any?
           format_items(school_items, "At your school")
         elsif nearby_ids.any?
-          # Try nearby
-          nearby_items = base_query.where(school_id: nearby_ids)
-                                   .where(condition)
-                                   .limit(8)
-          
-          if nearby_items.any?
-            format_items(nearby_items, "From nearby schools")
-          else
-            []
-          end
+          nearby_items = base_query.where(school_id: nearby_ids).where(condition).limit(8).to_a
+          format_items(nearby_items, "From nearby schools") if nearby_items.any?
         else
           []
         end
       end
       
-      # ============ SPORT SECTION ============
-      
       def build_sport_sections(school_id, nearby_ids, sport_cat, sport_type)
-        base_query = Item.where(main_category_id: sport_cat)
-                         .where(deleted: false, status: 'active')
-        
+        base_query = Item.where(main_category_id: sport_cat).where(deleted: false, status: 'active')
         sports = ['rugby', 'cricket', 'hockey', 'netball', 'soccer']
         
         if sport_type.present?
-          # Filter to specific sport
-          sections = [{
-            title: sport_type.capitalize,
-            type: sport_type,
-            items: get_sport_items(base_query, school_id, nearby_ids, sport_type)
-          }]
+          sections = [{ title: sport_type.capitalize, type: sport_type, items: get_sport_items(base_query, school_id, nearby_ids, sport_type) }]
         else
-          # All sports
-          sections = sports.map do |sport|
-            {
-              title: sport.capitalize,
-              type: sport,
-              items: get_sport_items(base_query, school_id, nearby_ids, sport)
-            }
-          end
+          sections = sports.map { |sport| { title: sport.capitalize, type: sport, items: get_sport_items(base_query, school_id, nearby_ids, sport) } }
         end
         
         sections.select { |s| s[:items].any? }
@@ -930,89 +782,99 @@ end
       def get_sport_items(base_query, school_id, nearby_ids, sport)
         condition = "name ILIKE '%#{sport}%' OR description ILIKE '%#{sport}%'"
         
-        # Try current school first
-        school_items = base_query.where(school_id: school_id)
-                                 .where(condition)
-                                 .limit(8)
+        school_items = base_query.where(school_id: school_id).where(condition).limit(8).to_a
         
         if school_items.any?
           format_items(school_items, "At your school")
         elsif nearby_ids.any?
-          # Try nearby
-          nearby_items = base_query.where(school_id: nearby_ids)
-                                   .where(condition)
-                                   .limit(8)
-          
-          if nearby_items.any?
-            format_items(nearby_items, "From nearby schools")
-          else
-            []
-          end
+          nearby_items = base_query.where(school_id: nearby_ids).where(condition).limit(8).to_a
+          format_items(nearby_items, "From nearby schools") if nearby_items.any?
         else
           []
         end
-      end
+      end     
+  
       
-      # ============ NATIONAL FALLBACK ============
-      
-      def national_popular_items
-        items = Item.where(deleted: false, status: 'active')
-                    .left_joins(:user_item_views)
-                    .group(:id)
-                    .order('COUNT(user_item_views.id) DESC, items.created_at DESC')
-                    .limit(20)
-        
-        format_items(items, "Popular in South Africa")
-      end
-      
-      # ============ FORMATTING ============
-      
-      def format_items(items, reason = nil)
+      # ============ IMPROVED format_items METHOD ============
+def format_items(items, reason = nil)
+  return [] if items.blank?
+
   items.map do |item|
-    {
-      id: item.id,
-      name: item.name.truncate(50),
-      description: item.description&.truncate(80),
-      price: item.price.to_f,
-      image: if item.cover_photo.present?
-               item.cover_photo
-             elsif item.images.attached?
-               generate_item_image_url(item)
-             else
-               nil
-             end,
-      school_id: item.school_id,
-      category: item.main_category&.name,
-      gender: item.gender&.name,
-      reason: reason,
-      created_at: item.created_at
-    }
-  end
-end
-      
-      def generate_item_image_url(item)
-        return nil unless item.images.attached?
-        
-        s3_client = Aws::S3::Client.new(
-          access_key_id: ENV['R2_ACCESS_KEY_ID'],
-          secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
-          endpoint: ENV['R2_ENDPOINT'],
-          region: 'auto',
-          force_path_style: true
-        )
-        
-        signer = Aws::S3::Presigner.new(client: s3_client)
-        
-        signer.presigned_url(
-          :get_object,
-          bucket: ENV['R2_BUCKET_NAME'],
-          key: item.images.first.key,
-          expires_in: 3600
-        )
-      rescue => e
-        Rails.logger.error "Failed to generate image URL: #{e.message}"
-        nil
+    next nil if item.nil?
+
+    # Build clean images array
+    image_urls = []
+
+    # 1. Main cover image
+    cover = item.respond_to?(:cover_photo) && item.cover_photo.present? ? item.cover_photo : 
+            (item.respond_to?(:image) && item.image.present? ? item.image : nil)
+    
+    image_urls << cover if cover.present?
+
+    # 2. Additional images - Handle both cases safely
+    if item.respond_to?(:additional_photo) && item.additional_photo.present?
+      additional = item.additional_photo
+
+      begin
+        # If it's already a string that looks like JSON array
+        if additional.is_a?(String) && additional.start_with?('[')
+          parsed = JSON.parse(additional)
+          if parsed.is_a?(Array)
+            parsed.each do |img|
+              image_urls << img if img.present? && !image_urls.include?(img)
+            end
+          end
+        # If it's already an Array (ideal case)
+        elsif additional.is_a?(Array)
+          additional.each do |img|
+            image_urls << img if img.present? && !image_urls.include?(img)
+          end
+        else
+          # Fallback: treat as single string
+          image_urls << additional if !image_urls.include?(additional)
+        end
+      rescue JSON::ParserError
+        # If parsing fails, treat as single image URL
+        image_urls << additional if additional.present? && !image_urls.include?(additional)
       end
+    end
+
+    # Remove any duplicates and nil values
+    image_urls = image_urls.compact.uniq
+
+    # Safely extract other attributes...
+    category_name = item.try(:main_category)&.try(:name)
+    gender_name   = item.try(:gender)&.try(:name)
+    condition_name = item.try(:item_condition)&.try(:name)
+    brand_name    = item.try(:brand)&.try(:name)
+    size_name     = item.try(:size)&.try(:name)
+    color_name    = item.try(:color)&.try(:name)
+
+    {
+      id: item.id.to_s,
+      name: item.try(:name).to_s.truncate(50),
+      description: item.try(:description).to_s.truncate(80),
+      price: item.try(:price).to_f,
+      image: cover,
+      school_id: item.try(:school_id),
+      category: category_name,
+      gender: gender_name,
+      reason: reason,
+      created_at: item.try(:created_at),
+      size_name: size_name,
+      color_name: color_name,
+      condition_name: condition_name,
+      brand_name: brand_name,
+      available_quantity: item.try(:available_quantity).to_i || 0,
+      images: image_urls,                    # ← This should now always be proper array of strings
+      cover_photo: cover
+    }
+  end.compact
+end
+
+
+
+
     end
   end
 end
