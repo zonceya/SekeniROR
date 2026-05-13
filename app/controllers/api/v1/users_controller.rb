@@ -1,8 +1,8 @@
 require 'redis'
 
 class Api::V1::UsersController < ApplicationController
-  skip_before_action :verify_authenticity_token, only: [:sign_in, :reactivate, 
-  :update_mobile,:send_login_otp, :verify_login_otp, :reactivate]
+ skip_before_action :verify_authenticity_token, only: [:sign_in, :reactivate, 
+:update_mobile, :send_login_otp, :verify_login_otp]
   before_action :authenticate_user, except: [:sign_in, :reactivate, :send_login_otp, :verify_login_otp]
 
 # app/controllers/api/v1/users_controller.rb
@@ -105,7 +105,7 @@ def send_login_otp
     rescue => e
       render json: { error: "Failed to send OTP: #{e.message}" }, status: :unprocessable_entity
     end
-      def verify_login_otp
+  def verify_login_otp
     begin
       raise "OTP token is required" if params[:otp_token].blank?
       raise "OTP code is required" if params[:otp_code].blank?
@@ -166,7 +166,8 @@ def send_login_otp
       
     rescue => e
       render json: { error: "Verification failed: #{e.message}" }, status: :bad_request
-    end
+     end
+   end
   end
 
   def chat_rooms
