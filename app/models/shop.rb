@@ -4,12 +4,14 @@ class Shop < ApplicationRecord
   has_many :items
   has_many :orders
   
-  validates :name, presence: true
-  
-  # Remove logo_url method completely
-  # The frontend will use user.profile_picture_url from login response
+  validates :name, presence: true 
+ 
   
   def public_name
     display_name.presence || name
+  end
+  
+  def seller_mobile
+    user&.mobile
   end
 end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_04_16_125305) do
+ActiveRecord::Schema[8.0].define(version: 2026_05_12_211910) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -667,7 +667,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_16_125305) do
   end
 
   create_table "users", force: :cascade do |t|
-    t.string "name", null: false
+    t.string "name"
     t.string "email", null: false
     t.datetime "created_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
     t.datetime "updated_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
@@ -679,7 +679,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_04_16_125305) do
     t.string "role", limit: 50, default: "user"
     t.string "password_digest", limit: 255
     t.string "firebase_token"
-
+    t.string "otp_code"
+    t.datetime "otp_sent_at"
+    t.string "otp_token"
+    t.string "otp_purpose"
+    t.boolean "email_verified", default: false
+    t.index ["auth_mode"], name: "index_users_on_auth_mode"
+    t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["otp_token"], name: "index_users_on_otp_token", unique: true
     t.unique_constraint ["email"], name: "unique_email"
     t.unique_constraint ["username"], name: "users_username_key"
   end

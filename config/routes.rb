@@ -121,10 +121,13 @@ Rails.application.routes.draw do
       get '/provinces', to: 'provinces#index'
       get '/towns', to: 'towns#index'
       
+      
       # ================================
       # 👤 USER ROUTES
       # ================================
       post 'users/sign_in', to: 'users#sign_in'
+      post 'users/send_login_otp', to: 'users#send_login_otp'     # Email OTP - Step 1
+      post 'users/verify_login_otp', to: 'users#verify_login_otp' # Email OTP - Step 2
       get 'users/profile', to: 'users#profile'
       put 'users/update_mobile', to: 'users#update_mobile'
       post 'users/disable', to: 'users#disable'
@@ -132,7 +135,7 @@ Rails.application.routes.draw do
       post 'users/firebase_token', to: 'users#update_firebase_token'
       get 'users/:user_id/ratings', to: 'users#user_ratings'
       put 'users/update_profile_picture', to: 'users#update_profile_picture'
-     
+      get 'users/:id', to: 'users#show'
       # ================================
       # 🏫 USER SCHOOL ROUTES - UPDATED
       # ================================
