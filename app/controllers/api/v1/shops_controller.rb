@@ -60,38 +60,54 @@ module Api
       end
       
       # GET /api/v1/shops/:id/items - Public shop items
-      def items
-        shop = Shop.find_by(id: params[:id])
-        
-        if shop.nil?
-          return render json: { 
-            success: false, 
-            error: "Shop not found" 
-          }, status: :not_found
-        end
-        
-        items = shop.items.where(deleted: false, status: 'active')
-        
-        # Apply filters if needed
-        if params[:sort] == 'newest'
-          items = items.order(created_at: :desc)
-        end
-        
-        render json: {
-          success: true,
-          shop: {
-            id: shop.id,
-            name: shop.public_name,
-            seller_name: shop.user.name
-          },
-          items: items.as_json(include: {
-            shop: {
-              only: [:id, :name]
-            }
-          })
+     # GET /api/v1/shops/:id/items - Public shop items
+def items
+  shop = Shop.find_by(id: params[:id])
+  
+  if shop.nil?
+    return render json: { 
+      success: false, 
+      error: "Shop not found" 
+    }, status: :not_found
+  end
+  
+  items = shop.items.where(deleted: false, status: 'active')
+  
+  # Apply filters if needed
+  if params[:sort] == 'newest'
+    items = items.order(created_at: :desc)
+  end
+  
+  # ✅ FIX: Include variants to get the actual price
+  render json: {
+    success: true,
+    shop: {
+      id: shop.id,
+      name: shop.public_name,
+      seller_name: shop.user.name
+    },
+    items: items.as_json(
+      include: {
+        variants: {  # ← ADD THIS - include variants with price
+          only: [:id, :price, :quantity, :size_id, :color_id, :condition_id]
+        },
+        shop: {
+          only: [:id, :name]
         }
-      end
+      },
+      methods: [:cover_photo_url, :image_urls]  # Include image methods if you have them
+    ).map do |item|
+      # Get the first variant (most items have one variant for simple items)
+      variant = item['variants']&.first
       
+      # Override price with variant price
+      item['price'] = variant&.[]('price') || 0.0
+      item['quantity'] = variant&.[]('quantity') || item['total_quantity']
+      
+      item
+    end
+  }
+end
       # GET /api/v1/shops/:id - Public shop view
       def public_show
         shop = Shop.find_by(id: params[:id])

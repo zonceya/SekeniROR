@@ -68,7 +68,13 @@ Rails.application.configure do
   #   port: 587,
   #   authentication: :plain
   # }
-
+# Add this at the bottom of config/application.rb, inside the class Application
+config.after_initialize do
+  if Rails.env.development?
+    require 'openssl'
+    OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
+  end
+end
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation cannot be found).
   config.i18n.fallbacks = true

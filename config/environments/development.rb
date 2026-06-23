@@ -1,5 +1,6 @@
 require "active_support/core_ext/integer/time"
-
+require 'openssl'
+OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
@@ -74,7 +75,7 @@ Rails.application.configure do
  # config.routes.default_url_options = { host: 'localhost', port: 3000 }
   config.action_controller.raise_on_missing_callback_actions = false
   # Raise error when a before_action's only/except options reference missing actions.
-  config.action_controller.raise_on_missing_callback_actions = true
+  # config.action_controller.raise_on_missing_callback_actions = true
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
     address: ENV['SMTP_ADDRESS'],

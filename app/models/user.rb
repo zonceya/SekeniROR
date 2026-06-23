@@ -31,41 +31,7 @@ class User < ApplicationRecord
   def chat_rooms
     ChatRoom.where('buyer_id = ? OR seller_id = ?', id, id)
   end
-  # app/models/user.rb
-
-def generate_otp(purpose = 'login')
-  # For new records, save first with minimal data
-  if new_record?
-    self.auth_mode = 'email_otp_pending'
-    self.status = true
-    self.deleted = false
-    self.role = 'user'
-    self.email_verified = false
-    # Skip validation to avoid name requirement
-    save(validate: false)
-  end
-  
-  self.otp_code = rand(10**OTP_LENGTH).to_s.rjust(OTP_LENGTH, "0")
-  self.otp_sent_at = Time.current
-  self.otp_token = SecureRandom.hex(32)
-  self.otp_purpose = purpose
-  save(validate: false)
-  otp_code
-end
-  def valid_otp?(code, purpose = 'login')
-    return false if otp_code.blank?
-    return false if otp_sent_at < OTP_EXPIRY.ago
-    return false if otp_purpose != purpose
-    otp_code == code
-  end
-  def clear_otp
-    update_columns(
-      otp_code: nil, 
-      otp_sent_at: nil, 
-      otp_token: nil,
-      otp_purpose: nil
-    )
-  end
+ 
   # Update user without requiring password
   def update_without_password(params)
     if params[:password].blank?
@@ -74,15 +40,42 @@ end
       update(params)
     end
   end
-
+  def firebase_uid?
+    firebase_uid.present?
+  end
+   def deleted?
+    deleted == true
+  end
   # Soft delete (makes user inactive)
   def soft_delete
-    update(deleted: true)
+  transaction do
+    # Update user status
+    update!(
+      deleted: true,
+      status: false
+    )
+    
+    # ✅ CRITICAL: Clear all school mappings on soft delete
+    user_schools.destroy_all
+    
+    Rails.logger.info "🗑️ User #{id} soft deleted - cleared all school mappings"
   end
+end
 
   def reactivate
-    update(deleted: false)
+  transaction do
+    # Reactivate user
+    update!(
+      deleted: false,
+      status: true
+    )
+    
+    # ✅ CRITICAL: Clear any existing school mappings when reactivating
+    user_schools.destroy_all
+    
+    Rails.logger.info "🔄 User #{id} reactivated - school mappings cleared"
   end
+end
 
   def profile_image_url
     if profile_picture.attached?
@@ -111,16 +104,19 @@ def setup_new_user(name = nil, auth_method = 'email_otp')
 end
   # ADD THESE HELPER METHODS FOR SCHOOL
   def school_mapped?
-    user_schools.exists?
-  end
+  return false if deleted?  # Deleted users have no school
+  user_schools.exists?
+end
   
   def school_name
-    current_school&.name
-  end
+  return nil if deleted?
+  current_school&.name
+end
   
   def school_id
-    current_school&.id
-  end
+  return nil if deleted?
+  current_school&.id
+end
 
   private
 
@@ -143,7 +139,7 @@ end
   def set_logout_time
     self.ended_at = Time.current
   end
-
+ 
   def generate_password_reset_token
     update(
       reset_password_token: SecureRandom.urlsafe_base64,

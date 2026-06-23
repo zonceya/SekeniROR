@@ -1,58 +1,60 @@
-# app/models/user_item_view.rb
 class UserItemView < ApplicationRecord
-  # Associations
   belongs_to :user, optional: true
   belongs_to :item
+  belongs_to :school, optional: true
   
-  # Validations
   validates :item_id, presence: true
-  validates :school_id, presence: true
+  validates :view_count, numericality: { greater_than_or_equal_to: 0 }
   
-  # Scopes
-  scope :recent, -> { where('created_at > ?', 7.days.ago) }
-  scope :today, -> { where('created_at > ?', Time.now.beginning_of_day) }
-  scope :this_week, -> { where('created_at > ?', 7.days.ago) }
-  scope :by_user, ->(user_id) { where(user_id: user_id) }
-  scope :by_school, ->(school_id) { where(school_id: school_id) }
-  scope :by_source, ->(source) { where(source: source) }
+  scope :recent, -> { where('created_at > ?', 30.days.ago) }
+  scope :for_school, ->(school_id) { where(school_id: school_id) }
   
-  # Class methods
-  def self.track(user_id, item_id, school_id, source = nil, session_id = nil)
-    view = where(user_id: user_id, item_id: item_id)
-           .where('created_at > ?', 1.hour.ago)
-           .first
+  def self.track(user_id, item_id, school_id, source, session_id)
+    # Find existing view for this user/item/session from today
+    view = where(
+      user_id: user_id,
+      item_id: item_id,
+      session_id: session_id
+    ).where('created_at >= ?', Time.current.beginning_of_day).first
     
-    if view
-      view.increment!(:view_count)
-    else
-      create(
+    # Create new if doesn't exist
+    if view.nil?
+      view = new(
         user_id: user_id,
         item_id: item_id,
-        school_id: school_id,
-        source: source,
-        session_id: session_id
+        session_id: session_id,
+        created_at: Time.current
       )
     end
-  rescue => e
-    Rails.logger.error "Failed to track view: #{e.message}"
+    
+    view.school_id = school_id if school_id.present?
+    view.source = source if source.present?
+    view.view_count = (view.view_count || 0) + 1
+    
+    if view.save
+      # Increment the item's cached view count
+      Item.where(id: item_id).update_all("view_count = view_count + 1")
+    end
+    
+    view
   end
   
   def self.popular_in_school(school_id, limit = 20, days = 7)
     where(school_id: school_id)
       .where('created_at > ?', days.days.ago)
       .group(:item_id)
-      .order(Arel.sql('SUM(view_count) DESC'))  # ✅ FIXED
+      .order(Arel.sql('COUNT(*) DESC'))
       .limit(limit)
       .pluck(:item_id)
   end
   
-  def self.user_preferred_categories(user_id, limit = 3)
-    joins(:item)
-      .where(user_id: user_id)
-      .where('user_item_views.created_at > ?', 30.days.ago)
+  def self.user_preferred_categories(user_id, limit = 5)
+    where(user_id: user_id)
+      .joins(:item)
       .group('items.main_category_id')
-      .order(Arel.sql('COUNT(*) DESC'))  # ✅ FIXED
+      .order(Arel.sql('COUNT(*) DESC'))
       .limit(limit)
       .pluck('items.main_category_id')
+      .compact
   end
 end

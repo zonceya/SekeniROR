@@ -1,7 +1,12 @@
 Rails.application.routes.draw do
   namespace :api do
+    # ================================
+    # ANDROID COMPATIBILITY ROUTES (without v1)
+    # These match what the Android app expects
+    # ================================
+    post 'auth/signup', to: 'v1/users#sign_up'
+    
     namespace :v1 do
-
       get '/home', to: 'home#index'
       
       # Schools
@@ -23,9 +28,8 @@ Rails.application.routes.draw do
       get '/categories/:id/items', to: 'categories#items'
       
       # ================================
-      # 🔍 FILTER ROUTES (NEW)
+      # 🔍 FILTER ROUTES
       # ================================
-      # Filter options for product listing
       get '/filters/options', to: 'filters#options'
       get '/filters/categories', to: 'filters#categories'
       get '/filters/subcategories', to: 'filters#subcategories'
@@ -39,67 +43,58 @@ Rails.application.routes.draw do
       # ================================
       # 🏪 SHOP ROUTES
       # ================================
-      resource :shop, only: [:show, :update]  # Current user's shop
-      get 'shops/:id', to: 'shops#public_show', as: :public_shop  # Public shop view
-      get 'shops/:id/items', to: 'shops#items'  # Public shop items
+      resource :shop, only: [:show, :update]
+      get 'shops/:id', to: 'shops#public_show', as: :public_shop
+      get 'shops/:id/items', to: 'shops#items'
       
       # ================================
-      # 🛒 ITEM ROUTES (PUBLIC & PRIVATE)
+      # 🛒 ITEM ROUTES
       # ================================
       resources :items, only: [:index, :show, :create] do
         collection do
-          get :shop_items          # GET /api/v1/items/shop_items?shop_id=1
-          get :viewAllShopItems    # GET /api/v1/items/viewAllShopItems
-          post :createItems        # POST /api/v1/items/createItems
+          get :shop_items
+          get :viewAllShopItems
+          post :createItems
         end
         
         member do
-          get :viewShopItem        # GET /api/v1/items/:id/viewShopItem
-          post :reserve_item       # POST /api/v1/items/:id/reserve_item
-          put :updateItem          # PUT /api/v1/items/:id/updateItem
+          get :viewShopItem
+          post :reserve_item
+          put :updateItem
           put :update   
-          delete :deleteItem       # DELETE /api/v1/items/:id/deleteItem
-          patch :mark_as_sold      # PATCH /api/v1/items/:id/mark_as_sold
-          post :hold               # POST /api/v1/items/:id/hold
-          delete :release          # DELETE /api/v1/items/:id/release
+          delete :deleteItem
+          patch :mark_as_sold
+          post :hold
+          delete :release
           
-          # Image routes
-          post 'images', to: 'items#add_images'           # POST /api/v1/items/:id/images
-          delete 'images/:image_id', to: 'items#remove_image'  # DELETE /api/v1/items/:id/images/:image_id
+          post 'images', to: 'items#add_images'
+          delete 'images/:image_id', to: 'items#remove_image'
         end
       end
       
       # ================================
-      # 🎯 RECOMMENDATIONS ROUTES - FIXED
+      # 🎯 RECOMMENDATIONS ROUTES
       # ================================
-      # Home feed
       get 'recommendations/home', to: 'recommendations#home'
-      
-      # Uniform and Sport sections
       get 'recommendations/uniform', to: 'recommendations#uniform'
       get 'recommendations/sport', to: 'recommendations#sport'
-      
-      # Recent items (grouped or by period)
       get 'recommendations/recent', to: 'recommendations#recent'
-      
-      # "Show all" routes (without nested namespace)
       get 'recommendations/recommended/all', to: 'recommendations#recommended_all'
       get 'recommendations/essentials/all', to: 'recommendations#essentials_all'
       get 'recommendations/trending/all', to: 'recommendations#trending_all'
       get 'recommendations/recent/all', to: 'recommendations#recent_all'
       
-      # Tracking
       post 'recommendations/track_view', to: 'recommendations#track_view'
       post 'recommendations/track_click', to: 'recommendations#track_click'
       
       # ================================
-      # 📋 MASTER DATA ROUTES (EXISTING)
+      # 📋 MASTER DATA ROUTES
       # ================================
       resources :brands, only: [:index]
       resources :categories, only: [:index]
       resources :main_categories, only: [:index] do
         member do
-          get :sub_categories  # This creates /api/v1/main_categories/:id/sub_categories
+          get :sub_categories
         end
       end
       resources :sub_categories, only: [:index]
@@ -117,31 +112,33 @@ Rails.application.routes.draw do
       get 'all_reference_data', to: 'reference_data#index'
       get '/categories/:id/filter_config', to: 'filters#category_filter_config'
       get '/filters/global_config', to: 'filters#global_filter_config'
-      # Provinces & Towns for filtering
       get '/provinces', to: 'provinces#index'
       get '/towns', to: 'towns#index'
       
-      
       # ================================
-      # 👤 USER ROUTES
+      # 👤 USER ROUTES (v1 API)
       # ================================
       post 'users/sign_in', to: 'users#sign_in'
-      post 'users/send_login_otp', to: 'users#send_login_otp'     # Email OTP - Step 1
-      post 'users/verify_login_otp', to: 'users#verify_login_otp' # Email OTP - Step 2
+      post 'users/signup', to: 'users#sign_up'
+      
+      # 🔥 FIREBASE AUTHENTICATION ROUTES (ADD THESE)
+      post 'users/firebase_auth', to: 'users#firebase_auth'
+      post 'users/firebase_token', to: 'users#update_firebase_token'    
+      
       get 'users/profile', to: 'users#profile'
       put 'users/update_mobile', to: 'users#update_mobile'
       post 'users/disable', to: 'users#disable'
       put 'users/reactivate', to: 'users#reactivate'
-      post 'users/firebase_token', to: 'users#update_firebase_token'
       get 'users/:user_id/ratings', to: 'users#user_ratings'
       put 'users/update_profile_picture', to: 'users#update_profile_picture'
       get 'users/:id', to: 'users#show'
+      
       # ================================
-      # 🏫 USER SCHOOL ROUTES - UPDATED
+      # 🏫 USER SCHOOL ROUTES
       # ================================
       resources :user_schools, only: [:create, :update, :destroy] do
         collection do
-          get :current  # GET /api/v1/user_schools/current
+          get :current
         end
       end
 
@@ -168,12 +165,10 @@ Rails.application.routes.draw do
           post :dispute
           post :submit_payment_proof
           
-          # ✅ REFUND ROUTES - CORRECTED
           post 'cancel_order', to: 'refunds#cancel_order'
           post 'dispute', to: 'refunds#dispute'
           get 'refund_status', to: 'refunds#show'
           
-          # 🔐 PIN VERIFICATION ROUTES
           post 'generate_pin', to: 'pin_verifications#generate_pin'
           get 'pin_verification', to: 'pin_verifications#show'
           get 'seller_pin', to: 'pin_verifications#seller_pin' 
@@ -181,7 +176,6 @@ Rails.application.routes.draw do
           post 'resend_pin', to: 'pin_verifications#resend_pin'
           post 'cancel_pin', to: 'pin_verifications#cancel_pin'
           
-          # PAYMENT ROUTES
           post 'initiate_payment', to: 'payments#initiate'
           get 'payment_status', to: 'payments#status'
           get 'payment_transactions', to: 'payments#transactions'
@@ -236,20 +230,17 @@ Rails.application.routes.draw do
       # 🔐 ADMIN ROUTES
       # ================================
       namespace :admin do
-        # Authentication
         post 'auth/signup', to: 'auth#signup'
         post 'auth/login', to: 'auth#login'
         post 'auth/logout', to: 'auth#logout'
         post 'auth/forgot_password', to: 'auth#forgot_password'
         post 'auth/reset_password', to: 'auth#reset_password'
 
-        # Admin User Management
         patch 'users/:id/update_password', to: 'users#update_password'
         resources :users, only: [:index, :show, :update, :destroy] do
           post :reactivate, on: :member
         end
     
-        # Admin Item Management
         resources :items, only: [] do
           collection do
             get :adminViewAllItems
@@ -259,9 +250,6 @@ Rails.application.routes.draw do
           end
         end
      
-        # ================================
-        # 🚚 ADMIN ORDER MANAGEMENT
-        # ================================
         resources :orders, only: [:index, :show] do
           collection do
             get :bulk_index
@@ -271,7 +259,6 @@ Rails.application.routes.draw do
           end
         end
         
-        # ADMIN PAYMENT ROUTES
         resources :payments, only: [] do
           collection do
             get :flagged
@@ -285,12 +272,10 @@ Rails.application.routes.draw do
           end
         end
 
-        # ADMIN TRANSFER REQUESTS
         resources :transfer_requests, only: [:index, :update] do
           post 'process', on: :member
         end
 
-        # ✅ ADMIN REFUND & DISPUTE ROUTES
         resources :refunds, only: [:index, :show, :update] do
           member do
             post 'approve', to: 'refunds#approve_refund'

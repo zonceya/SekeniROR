@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_05_12_211910) do
+ActiveRecord::Schema[8.0].define(version: 2026_06_08_215746) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -305,9 +305,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_12_211910) do
     t.decimal "max_price", precision: 10, scale: 2
     t.integer "available_variants_count", default: 0
     t.integer "item_condition_id"
+    t.integer "view_count", default: 0, null: false
     t.index ["id"], name: "idx_items_category"
     t.index ["main_category_id"], name: "index_items_on_main_category_id"
+    t.index ["price"], name: "index_items_on_price"
+    t.index ["school_id", "created_at"], name: "index_items_on_school_id_and_created_at"
+    t.index ["school_id", "price"], name: "index_items_on_school_id_and_price"
+    t.index ["school_id", "status", "deleted", "created_at", "price"], name: "index_items_on_school_status_deleted_created_price"
+    t.index ["school_id", "status", "deleted", "price"], name: "index_items_on_school_status_deleted_price"
+    t.index ["school_id"], name: "index_items_on_school_id"
     t.index ["sub_category_id"], name: "index_items_on_sub_category_id"
+    t.index ["view_count"], name: "index_items_on_view_count"
   end
 
   create_table "locations", force: :cascade do |t|
@@ -655,6 +663,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_12_211910) do
     t.integer "school_id"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", default: -> { "CURRENT_TIMESTAMP" }
+    t.index ["user_id", "school_id"], name: "index_user_schools_on_user_id_and_school_id", unique: true
   end
 
   create_table "user_sessions", id: :serial, force: :cascade do |t|
@@ -679,14 +688,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_12_211910) do
     t.string "role", limit: 50, default: "user"
     t.string "password_digest", limit: 255
     t.string "firebase_token"
-    t.string "otp_code"
-    t.datetime "otp_sent_at"
-    t.string "otp_token"
-    t.string "otp_purpose"
-    t.boolean "email_verified", default: false
+    t.string "firebase_uid"
     t.index ["auth_mode"], name: "index_users_on_auth_mode"
     t.index ["email"], name: "index_users_on_email", unique: true
-    t.index ["otp_token"], name: "index_users_on_otp_token", unique: true
+    t.index ["firebase_uid"], name: "index_users_on_firebase_uid", unique: true
     t.unique_constraint ["email"], name: "unique_email"
     t.unique_constraint ["username"], name: "users_username_key"
   end

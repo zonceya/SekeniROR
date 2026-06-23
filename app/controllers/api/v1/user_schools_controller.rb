@@ -9,10 +9,19 @@ module Api
 
       # GET /api/v1/user_schools/current
       def current
+        cache_key = "user_schools_current_#{@current_user.id}"
+        cached = Rails.cache.read(cache_key)
+        
+        if cached
+          Rails.logger.info "📚 Serving from CACHE for user #{@current_user.id}"
+          return render json: cached, status: :ok
+        end
+        
+        Rails.logger.info "📚 Cache MISS - loading from database for user #{@current_user.id}"
         user_school = @current_user.current_school_mapping
         
-        if user_school
-          render json: {
+        response_data = if user_school
+          {
             school_mapped: true,
             school: {
               id: user_school.school_id,
@@ -24,13 +33,18 @@ module Api
               mapped_at: user_school.created_at,
               updated_at: user_school.updated_at
             }
-          }, status: :ok
+          }
         else
-          render json: {
+          {
             school_mapped: false,
             school: nil
-          }, status: :ok
+          }
         end
+        
+        # Cache for 1 hour
+        Rails.cache.write(cache_key, response_data, expires_in: 1.hour)
+        
+        render json: response_data, status: :ok
       end
 
       # POST /api/v1/user_schools
@@ -60,8 +74,8 @@ module Api
           }, status: :bad_request
         end
 
-        # Find the school
-        school = School.find_by(id: params[:school_id])
+        # Find the school with eager loading
+        school = School.includes(:province).find_by(id: params[:school_id])
         unless school
           Rails.logger.error "❌ School not found with ID: #{params[:school_id]}"
           
@@ -109,8 +123,8 @@ module Api
           }, status: :bad_request
         end
 
-        # Find the new school
-        school = School.find_by(id: params[:school_id])
+        # Find the new school with eager loading
+        school = School.includes(:province).find_by(id: params[:school_id])
         unless school
           Rails.logger.error "❌ School not found with ID: #{params[:school_id]}"
           
@@ -220,6 +234,9 @@ module Api
 
       def clear_user_cache
         begin
+          # Clear Rails cache
+          Rails.cache.delete("user_schools_current_#{@current_user.id}")
+          # Clear Redis cache for profile
           redis.del("user_#{@current_user.id}_profile")
           Rails.logger.info "🗑️ Cleared cache for user #{@current_user.id}"
         rescue => e
@@ -229,6 +246,9 @@ module Api
 
       def redis
         @redis ||= Redis.new(url: ENV['REDIS_URL'] || 'redis://localhost:6379')
+      rescue => e
+        Rails.logger.warn "⚠️ Redis connection failed: #{e.message}"
+        nil
       end
     end
   end
