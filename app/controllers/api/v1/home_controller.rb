@@ -38,22 +38,22 @@ module Api
       end
 
       def get_recent_items
+        # OPTIMIZED: Added includes to prevent N+1
         Item.where(deleted: false, status: 'active')
-            .includes(:shop)
+            .includes(:shop)  # ← ADD THIS
             .order(created_at: :desc)
             .limit(20)
       end
 
       def get_trending_near_you
-        # Use a more reliable method for trending items
+        # OPTIMIZED: Added includes to prevent N+1
         Item.where(deleted: false, status: 'active')
-            .includes(:shop)
+            .includes(:shop)  # ← ADD THIS
             .order('RANDOM()')
             .limit(20)
       end
 
       def get_popular_schools
-        # Check if association exists before using it
         if defined?(UserSchool) && School.reflect_on_association(:user_schools)
           School.joins(:user_schools)
                 .group('schools.id')
@@ -66,7 +66,6 @@ module Api
       end
 
       def get_popular_brands
-        # Check if association exists
         if Brand.reflect_on_association(:items)
           Brand.joins(:items)
                .where(items: { deleted: false, status: 'active' })
@@ -80,16 +79,15 @@ module Api
       end
 
       def get_flash_sales
-        # Fallback implementation
         Item.where(deleted: false, status: 'active')
             .where("label ILIKE ? OR name ILIKE ?", "%sale%", "%sale%")
-            .includes(:shop)
+            .includes(:shop)  # ← ADD THIS
             .limit(12)
       end
 
       def get_suggested_items
         Item.where(deleted: false, status: 'active')
-            .includes(:shop)
+            .includes(:shop)  # ← ADD THIS
             .order('RANDOM()')
             .limit(12)
       end

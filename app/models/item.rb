@@ -44,7 +44,10 @@ class Item < ApplicationRecord
     @quantity = value.to_i
     self.total_quantity = value.to_i
   end
-  
+  def view_count
+  self[:view_count].presence || UserItemView.where(item_id: id).count
+  end
+  public :view_count
   def reserved
     @reserved || self[:total_reserved] || 0
   end
@@ -181,7 +184,7 @@ class Item < ApplicationRecord
       self.sub_category_id = default_sub.id if default_sub
     end
   end
-  
+ 
   def non_negative_inventory
     if self.quantity < 0
       errors.add(:quantity, "can't be negative")

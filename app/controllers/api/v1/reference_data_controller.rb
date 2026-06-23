@@ -5,22 +5,46 @@ module Api
       
       # GET /api/v1/all_reference_data
       def index
-        render json: {
+        # Cache key for 1 hour - reference data rarely changes
+        cache_key = "api/v1/all_reference_data"
+        
+        # Try to get from cache first
+        cached_data = Rails.cache.read(cache_key)
+        
+        if cached_data
+          Rails.logger.info "Serving reference data from CACHE (0 queries)"
+          return render json: cached_data
+        end
+        
+        Rails.logger.info "Cache MISS - loading reference data from database"
+        
+        # Eager load sub_categories
+        main_categories = MainCategory.active
+                                      .ordered
+                                      .includes(:sub_categories)
+        
+        # Eager load province for schools
+        schools = School.limit(50).includes(:province)
+        
+        response_data = {
           success: true,
           data: {
-            main_categories: MainCategory.active.ordered.map { |cat|
+            main_categories: main_categories.map { |cat|
               {
                 id: cat.id,
                 name: cat.name,
                 description: cat.description,
                 icon_name: cat.icon_name,
                 display_order: cat.display_order,
-                item_types: cat.item_types.active.map { |type|
+                sub_categories: cat.sub_categories
+                                  .select { |sub| sub.is_active == true }
+                                  .sort_by { |sub| [sub.display_order, sub.id] }
+                                  .map { |sub|
                   {
-                    id: type.id,
-                    name: type.name,
-                    description: type.description,
-                    group_id: type.group_id
+                    id: sub.id,
+                    name: sub.name,
+                    description: sub.description,
+                    display_order: sub.display_order
                   }
                 }
               }
@@ -31,15 +55,12 @@ module Api
             conditions: ItemCondition.all.map { |c| { id: c.id, name: c.name, description: c.description } },
             provinces: Province.all.order(:name).map { |p| { id: p.id, name: p.name } },
             towns: Town.all.map { |t| { id: t.id, name: t.name, province_id: t.province_id } },
-            schools: School.limit(50).map { |s| 
+            schools: schools.map { |s| 
               {
                 id: s.id,
                 name: s.name,
                 province_id: s.province_id,
-                province: {
-                  id: s.province.id,
-                  name: s.province.name
-                }
+                province: s.province ? { id: s.province.id, name: s.province.name } : nil
               }
             },
             genders: Gender.where(category: 'standard').order(:id).map { |g| 
@@ -62,6 +83,11 @@ module Api
             }
           }
         }
+        
+        # Store in cache for 1 hour
+        Rails.cache.write(cache_key, response_data, expires_in: 1.hour)
+        
+        render json: response_data
       end
     end
   end

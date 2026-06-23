@@ -10,109 +10,107 @@ module Api
         :mark_as_sold, :add_images, :remove_image
       ]
       
-def index
-  items = Item.includes(
-    :main_category, :sub_category, :gender, :school,
-    :province, :location, :brand, :item_condition, :tags,
-    shop: :user,                    # ← Add comma here
-    item_variants: [:size, :color]
-  ).where(deleted: false, status: 'active')
+      def index
+        items = Item.includes(
+          :main_category, :sub_category, :gender, :school,
+          :province, :location, :brand, :item_condition, :tags,
+          shop: :user,
+          item_variants: [:size, :color]
+        ).where(deleted: false, status: 'active')
 
-  # SEARCH
-  if params[:q].present?
-    search_term = "%#{params[:q].downcase}%"
-    items = items.where(
-      "LOWER(name) LIKE ? OR LOWER(description) LIKE ?",
-      search_term, search_term
-    )
-  end
+        # SEARCH
+        if params[:q].present?
+          search_term = "%#{params[:q].downcase}%"
+          items = items.where(
+            "LOWER(name) LIKE ? OR LOWER(description) LIKE ?",
+            search_term, search_term
+          )
+        end
 
-  # FILTERS
-  items = items.where(main_category_id: params[:main_category_id]) if params[:main_category_id].present?
-  items = items.where(sub_category_id: params[:sub_category_id])   if params[:sub_category_id].present?
-  items = items.where(gender_id: params[:gender_id])               if params[:gender_id].present?
-  items = items.where(school_id: params[:school_id])               if params[:school_id].present?
-  items = items.where(province_id: params[:province_id])           if params[:province_id].present?
-  items = items.where(location_id: params[:town_id])               if params[:town_id].present?
-  items = items.where(brand_id: params[:brand_id])                 if params[:brand_id].present?
+        # FILTERS
+        items = items.where(main_category_id: params[:main_category_id]) if params[:main_category_id].present?
+        items = items.where(sub_category_id: params[:sub_category_id])   if params[:sub_category_id].present?
+        items = items.where(gender_id: params[:gender_id])               if params[:gender_id].present?
+        items = items.where(school_id: params[:school_id])               if params[:school_id].present?
+        items = items.where(province_id: params[:province_id])           if params[:province_id].present?
+        items = items.where(location_id: params[:town_id])               if params[:town_id].present?
+        items = items.where(brand_id: params[:brand_id])                 if params[:brand_id].present?
 
-  # SORTING
-  case params[:sort]
-  when 'price_low'  then items = items.order(price: :asc)
-  when 'price_high' then items = items.order(price: :desc)
-  else                   items = items.order(created_at: :desc)
-  end
+        # SORTING
+        case params[:sort]
+        when 'price_low'  then items = items.order(price: :asc)
+        when 'price_high' then items = items.order(price: :desc)
+        else                   items = items.order(created_at: :desc)
+        end
 
-  # PAGINATION
-  items = items.limit(params[:limit])   if params[:limit]
-  items = items.offset(params[:offset]) if params[:offset]
+        # PAGINATION
+        items = items.limit(params[:limit])   if params[:limit]
+        items = items.offset(params[:offset]) if params[:offset]
 
-  # Load to array to preserve eager-loaded associations
-  loaded_items = items.to_a
+        loaded_items = items.to_a
 
-  items_with_details = loaded_items.map do |item|
-    # Get the primary variant (first active one)
-    primary_variant = item.item_variants.find(&:is_active?)
-    
-    {
-      id: item.id,
-      name: item.name,
-      description: item.description,
-      price: item.price.to_f,
-      quantity: item.quantity,
-      available_quantity: item.available_quantity,
-      status: item.status,
-      main_category: item.main_category&.name,
-      main_category_id: item.main_category_id,
-      sub_category: item.sub_category&.name,
-      sub_category_id: item.sub_category_id,
-      gender: item.gender&.name,
-      gender_id: item.gender_id,
-      school: item.school&.name,
-      school_id: item.school_id,
-      size: primary_variant&.size&.name,
-      size_id: primary_variant&.size_id,
-      color: primary_variant&.color&.name,
-      color_id: primary_variant&.color_id,
-      image: item.cover_photo,
-      images: item.all_image_urls,
-      brand: item.brand&.name,
-      brand_id: item.brand_id,
-      condition: item.item_condition&.name,
-      condition_id: item.item_condition_id,
-      province: item.province&.name,
-      province_id: item.province_id,
-      town: item.location&.state_or_region,
-      town_id: item.location_id,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      shop: {
-        id: item.shop&.id,
-        name: item.shop&.name,
-        display_name: item.shop&.display_name,
-        seller_name: item.shop&.user&.name,
-        seller_mobile: item.shop&.user&.mobile
-      },
-      tags: item.tags.map(&:name)
-    }
-  end
+        items_with_details = loaded_items.map do |item|
+          primary_variant = item.item_variants.find(&:is_active?)
+          
+          {
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            price: item.price.to_f,
+            quantity: item.quantity,
+            available_quantity: item.available_quantity,
+            status: item.status,
+            main_category: item.main_category&.name,
+            main_category_id: item.main_category_id,
+            sub_category: item.sub_category&.name,
+            sub_category_id: item.sub_category_id,
+            gender: item.gender&.name,
+            gender_id: item.gender_id,
+            school: item.school&.name,
+            school_id: item.school_id,
+            size: primary_variant&.size&.name,
+            size_id: primary_variant&.size_id,
+            color: primary_variant&.color&.name,
+            color_id: primary_variant&.color_id,
+            image: item.cover_photo,
+            images: item.all_image_urls,
+            brand: item.brand&.name,
+            brand_id: item.brand_id,
+            condition: item.item_condition&.name,
+            condition_id: item.item_condition_id,
+            province: item.province&.name,
+            province_id: item.province_id,
+            town: item.location&.state_or_region,
+            town_id: item.location_id,
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            shop: {
+              id: item.shop&.id,
+              name: item.shop&.name,
+              display_name: item.shop&.display_name,
+              seller_name: item.shop&.user&.name,
+              seller_mobile: item.shop&.user&.mobile
+            },
+            tags: item.tags.map(&:name)
+          }
+        end
 
-  render json: {
-    success: true,
-    items: items_with_details,
-    total_count: loaded_items.size,
-    filters_applied: {
-      q: params[:q],
-      main_category_id: params[:main_category_id],
-      sub_category_id: params[:sub_category_id],
-      gender_id: params[:gender_id],
-      school_id: params[:school_id],
-      province_id: params[:province_id],
-      town_id: params[:town_id],
-      brand_id: params[:brand_id]
-    }.compact
-  }
-end
+        render json: {
+          success: true,
+          items: items_with_details,
+          total_count: loaded_items.size,
+          filters_applied: {
+            q: params[:q],
+            main_category_id: params[:main_category_id],
+            sub_category_id: params[:sub_category_id],
+            gender_id: params[:gender_id],
+            school_id: params[:school_id],
+            province_id: params[:province_id],
+            town_id: params[:town_id],
+            brand_id: params[:brand_id]
+          }.compact
+        }
+      end
 
       # POST /api/v1/items - Add item to current user's shop
       def createItems
@@ -128,9 +126,6 @@ end
           }, status: :unprocessable_entity
         end
         
-        # Log received parameters
-        Rails.logger.info "Item params: #{params[:item].inspect}"
-        
         # Validate required fields for ITEM (not variant)
         required_fields = [:name, :description, :main_category_id, :sub_category_id]
         missing_fields = required_fields.select { |field| params[:item][field].blank? }
@@ -143,7 +138,6 @@ end
           }, status: :unprocessable_entity
         end
         
-        # Validate main_category exists
         main_category = MainCategory.find_by(id: params[:item][:main_category_id])
         unless main_category
           Rails.logger.error "Invalid main_category_id: #{params[:item][:main_category_id]}"
@@ -154,7 +148,6 @@ end
           }, status: :unprocessable_entity
         end
         
-        # Validate sub_category exists and belongs to main_category
         sub_category = SubCategory.find_by(id: params[:item][:sub_category_id])
         unless sub_category
           Rails.logger.error "Invalid sub_category_id: #{params[:item][:sub_category_id]}"
@@ -174,7 +167,6 @@ end
         end
         
         begin
-          # Extract variant-specific parameters
           variant_params = {
             size_id: params[:item][:size_id],
             color_id: params[:item][:color_id],
@@ -183,26 +175,19 @@ end
             quantity: params[:item][:quantity]
           }
           
-          # Build item with basic info (no variant-specific fields)
           item_params = item_params_for_create.to_h
-          
-          # Remove variant-specific fields from item params
           item_params = item_params.except(:size_id, :color_id, :item_condition_id, :price, :quantity)
-          
-          # Set total_quantity from variant quantity
           item_params[:total_quantity] = variant_params[:quantity].to_i if variant_params[:quantity]
           
           item = shop.items.new(item_params)
           item.item_type_id = nil
           
-          # Save the item
           if item.save
             Rails.logger.info "Item saved successfully: #{item.id}"
             
-            # Create item variant if we have variant data
             if variant_params[:size_id].present? || variant_params[:color_id].present? || variant_params[:condition_id].present?
               begin
-                item_variant = item.item_variants.create!(
+                item.item_variants.create!(
                   size_id: variant_params[:size_id],
                   color_id: variant_params[:color_id],
                   condition_id: variant_params[:condition_id],
@@ -210,34 +195,24 @@ end
                   quantity: variant_params[:quantity] || 0,
                   is_active: true
                 )
-                Rails.logger.info "Item variant created: #{item_variant.id}"
+                Rails.logger.info "Item variant created"
               rescue => e
                 Rails.logger.error "Failed to create item variant: #{e.message}"
-                # Don't fail the whole request if variant creation fails
               end
             end
             
-            # Handle tags
             if params[:item][:tag_ids].present?
-              # Remove duplicates from the incoming array
               unique_tag_ids = params[:item][:tag_ids].map(&:to_i).uniq
               
               unique_tag_ids.each do |tag_id|
-                # Check if tag exists and if this item doesn't already have it
                 if Tag.exists?(id: tag_id)
                   unless item.item_tags.exists?(tag_id: tag_id)
                     item.item_tags.create!(tag_id: tag_id)
-                    Rails.logger.info "✅ Added tag #{tag_id} to item #{item.id}"
-                  else
-                    Rails.logger.info "⏭️ Tag #{tag_id} already exists for item #{item.id}, skipping"
                   end
-                else
-                  Rails.logger.warn "⚠️ Tag ID #{tag_id} does not exist, skipping"
                 end
               end
             end
             
-            # Handle images
             image_urls = []
             if params[:item] && params[:item][:images].present?
               begin
@@ -245,21 +220,12 @@ end
                   item, 
                   params[:item][:images]
                 )
-                
-                successful_uploads = image_upload_results.select { |r| r[:success] }
-                failed_uploads = image_upload_results.select { |r| !r[:success] }
-                
                 image_urls = generate_item_image_urls(item)
-                
-                if failed_uploads.any?
-                  Rails.logger.warn "Some images failed to upload for item #{item.id}: #{failed_uploads.map { |f| f[:error] }}"
-                end
               rescue => e
                 Rails.logger.error "Image upload error: #{e.message}"
               end
             end
             
-            # Return success response with detailed item info
             render json: {
               success: true,
               message: "Item created successfully",
@@ -310,22 +276,19 @@ end
             render json: { 
               success: false,
               error: "Failed to create item",
-              errors: item.errors.full_messages,
-              details: item.errors.details
+              errors: item.errors.full_messages
             }, status: :unprocessable_entity
           end
           
         rescue => e
-          Rails.logger.error "Exception in createItems: #{e.message}\n#{e.backtrace.join("\n")}"
+          Rails.logger.error "Exception in createItems: #{e.message}"
           render json: { 
             success: false,
-            error: "Server error: #{e.message}",
-            trace: Rails.env.development? ? e.backtrace : nil
+            error: "Server error: #{e.message}"
           }, status: :internal_server_error
         end
       end
 
-      # Separate params method for creating items (without variant-specific fields)
       def item_params_for_create
         params.require(:item).permit(
           :name, :description, 
@@ -337,7 +300,6 @@ end
         )
       end
 
-      # Keep existing item_params for updates
       def item_params
         params.require(:item).permit(
           :name, :description, :price, :quantity,
@@ -357,7 +319,6 @@ end
           return render json: { error: "Item not found" }, status: :not_found
         end
         
-        # Ensure user owns the item
         if item.shop.user_id != @current_user.id
           return render json: { error: "Not authorized" }, status: :unauthorized
         end
@@ -366,7 +327,6 @@ end
           return render json: { error: "No images provided" }, status: :unprocessable_entity
         end
         
-        # Check image limit
         total_images = item.images.count + Array(params[:images]).count
         if total_images > 3
           return render json: { 
@@ -374,24 +334,12 @@ end
           }, status: :unprocessable_entity
         end
         
-        # Upload new images
-        image_upload_results = ImageUploadService.upload_item_images(
-          item, 
-          params[:images]
-        )
-        
-        successful_uploads = image_upload_results.select { |r| r[:success] }
-        failed_uploads = image_upload_results.select { |r| !r[:success] }
-        
-        # Generate updated image URLs
+        image_upload_results = ImageUploadService.upload_item_images(item, params[:images])
         image_urls = item.reload.images.attached? ? generate_item_image_urls(item) : []
         
         render json: {
           success: true,
           message: "Images added successfully",
-          uploaded_count: successful_uploads.count,
-          failed_count: failed_uploads.count,
-          failed_uploads: failed_uploads.map { |f| f[:error] },
           total_images: item.images.count,
           images: image_urls
         }, status: :ok
@@ -404,22 +352,17 @@ end
           return render json: { error: "Item not found" }, status: :not_found
         end
         
-        # Ensure user owns the item
         if item.shop.user_id != @current_user.id
           return render json: { error: "Not authorized" }, status: :unauthorized
         end
         
-        # Find the specific image attachment
         image_attachment = item.images.find_by(id: params[:image_id])
         
         if image_attachment.nil?
           return render json: { error: "Image not found" }, status: :not_found
         end
         
-        # Purge the image
         image_attachment.purge
-        
-        # Clear cache for this item's images
         ImageUploadService.clear_record_image_cache(item, :images)
         
         render json: {
@@ -429,175 +372,189 @@ end
         }, status: :ok
       end
 
-      # COMPREHENSIVE UPDATE METHOD - Handles fields, tags, and images in one request
-      def updateItem
-        # Ensure user owns the item
-        if @item.shop.user_id != @current_user.id
-          return render json: { 
-            success: false,
-            error: "Not authorized" 
-          }, status: :unauthorized
-        end
-        
-        begin
-          ActiveRecord::Base.transaction do
-            # 1. Update basic item fields (excluding images)
-            if params[:item].present?
-              update_item_attributes
-            end
-            
-            # 2. Update tags if provided
-            if params[:item].present? && params[:item][:tag_ids].present?
-              update_item_tags
-            end
-            
-            # 3. Handle image operations
-            handle_image_operations if image_operations_present?
-            
-            # 4. Handle complete image replacement
-            handle_image_replacement if params[:replace_images].present?
-          end
-          
-          # Return success response with updated item
-          render json: {
-            success: true,
-            message: "Item updated successfully",
-            item: format_item_response(@item.reload)
-          }
-          
-        rescue => e
-          Rails.logger.error "Update failed: #{e.message}\n#{e.backtrace.join("\n")}"
-          render json: {
-            success: false,
-            error: "Update failed: #{e.message}"
-          }, status: :unprocessable_entity
-        end
-      end
-
-      # GET /api/v1/shops/:shop_id/items - Public view of a specific shop's items
-      def shop_items
-        shop = Shop.find_by(id: params[:shop_id])
-        
-        if shop.nil?
-          return render json: { error: "Shop not found" }, status: :not_found
-        end
-        
-        items = shop.items.where(deleted: false, status: 'active')
-        
-        # Apply filters
-        items = items.where(main_category_id: params[:main_category_id]) if params[:main_category_id].present?
-        items = items.where(sub_category_id: params[:sub_category_id]) if params[:sub_category_id].present?
-        items = items.where(gender_id: params[:gender_id]) if params[:gender_id].present?
-        
-        if params[:sort] == 'newest'
-          items = items.order(created_at: :desc)
-        end
-        
-        items_with_images = items.map do |item|
-          item_data = item.as_json
-          item_data['images'] = item.images.attached? ? generate_item_image_urls(item) : []
-          item_data
-        end
-        
-        render json: {
-          success: true,
-          shop: {
-            id: shop.id,
-            name: shop.public_name,
-            seller_name: shop.user.name
-          },
-          items: items_with_images
-        }
-      end
-
-      # GET /api/v1/items/:id - Public view of specific item
-
-def show
-  item = Item.includes(:shop, :main_category, :sub_category, :gender, 
-                      :school, :province, :location, 
-                      :brand, :item_condition, :tags, 
-                      item_variants: [:size, :color, :condition]) 
-            .find_by(id: params[:id], deleted: false)
-  
-  if item.nil?
-    return render json: { error: "Item not found" }, status: :not_found
+     def updateItem
+  if @item.shop.user_id != @current_user.id
+    return render json: { 
+      success: false,
+      error: "Not authorized" 
+    }, status: :unauthorized
   end
   
-  primary_variant = item.item_variants.where(is_active: true).first
+  begin
+    ActiveRecord::Base.transaction do
+      # Remove variant-specific fields from item params
+      variant_params = {
+        size_id: params[:item][:size_id],
+        color_id: params[:item][:color_id],
+        condition_id: params[:item][:item_condition_id],
+        price: params[:item][:price],
+        quantity: params[:item][:quantity]
+      }.compact
+      
+      # Only update Item with non-variant fields
+      if params[:item].present?
+        item_update_data = params[:item].to_unsafe_h.except(
+          :size_id, :color_id, :item_condition_id, :price, :quantity
+        )
+        
+        if item_update_data.present?
+          @item.update!(item_update_data)
+        end
+        
+        # Update or create variant with color_id
+        if variant_params.any?
+          variant = @item.item_variants.find_or_initialize_by(is_active: true)
+          variant.update!(variant_params)
+        end
+      end
+      
+      # Update tags if provided
+      if params[:item].present? && params[:item][:tag_ids].present?
+        update_item_tags
+      end
+      
+      # Handle image operations
+      handle_image_operations if image_operations_present?
+      handle_image_replacement if params[:replace_images].present?
+    end
+    
+    render json: {
+      success: true,
+      message: "Item updated successfully",
+      item: format_item_response(@item.reload)
+    }
+    
+  rescue => e
+    Rails.logger.error "Update failed: #{e.message}"
+    render json: {
+      success: false,
+      error: "Update failed: #{e.message}"
+    }, status: :unprocessable_entity
+  end
+end
+
+def shop_items
+  shop = current_user.shop
   
-  render json: {
-    success: true,
-    item: {
+  if shop.nil?
+    return render json: { error: "Shop not found" }, status: :not_found
+  end
+  
+  items = shop.items.where(deleted: false)
+                   .includes(:main_category, :sub_category, :gender, :item_variants)
+  
+  # Apply filters if provided
+  items = items.where(main_category_id: params[:main_category_id]) if params[:main_category_id].present?
+  items = items.where(sub_category_id: params[:sub_category_id]) if params[:sub_category_id].present?
+  items = items.where(gender_id: params[:gender_id]) if params[:gender_id].present?
+  
+  # Sort by newest if requested
+  if params[:sort] == 'newest'
+    items = items.order(created_at: :desc)
+  end
+  
+  items_with_images = items.map do |item|
+    primary_variant = item.item_variants.find(&:is_active?)
+    
+    {
       id: item.id,
       name: item.name,
       description: item.description,
-      price: item.price.to_f,
-      quantity: item.quantity,
+      price: primary_variant&.price&.to_f || item.price.to_f,  
+      quantity: primary_variant&.quantity || item.quantity,  # ← FIX: Get quantity from variant
       available_quantity: item.available_quantity,
       status: item.status,
-      main_category: item.main_category&.as_json,
-      sub_category: item.sub_category&.as_json,
-      gender: item.gender&.as_json,
-      school: item.school&.as_json,
-      size: primary_variant&.size&.as_json || item.size&.as_json,
-      color: primary_variant&.color&.as_json || item.color&.as_json,
-      condition: primary_variant&.condition&.as_json || item.item_condition&.as_json,
-      brand: item.brand&.as_json,
-      province: item.province&.as_json,
-      town: item.location&.as_json,
+      view_count: item.view_count,
+      main_category: item.main_category&.name,
+      main_category_id: item.main_category_id,
+      sub_category: item.sub_category&.name,
+      sub_category_id: item.sub_category_id,
+      gender: item.gender&.name,
+      gender_id: item.gender_id,
       created_at: item.created_at,
-      updated_at: item.updated_at,
-      shop: {
-        id: item.shop&.id,
-        name: item.shop&.name,
-        display_name: item.shop&.display_name,
-        seller_name: item.shop&.user&.name,
-        seller_mobile: item.shop&.user&.mobile
-      },
-      cover_photo: item.cover_photo,
-      # ✅ FIXED: Use all_image_urls like recommendations endpoint
-      images: item.all_image_urls,  # ← This returns all 3 images!
-      tags: item.tags.as_json,
-      variants: item.item_variants.where(is_active: true).map do |variant|
-        {
-          id: variant.id,
-          size_id: variant.size_id,
-          size_name: variant.size&.name,
-          color_id: variant.color_id,
-          color_name: variant.color&.name,
-          condition_id: variant.condition_id,
-          condition_name: variant.condition&.name,
-          price: variant.price.to_f,
-          quantity: variant.quantity,
-          is_active: variant.is_active
-        }
-      end
+      images: item.all_image_urls
     }
+  end
+  
+  render json: {
+    success: true,
+    shop: {
+      id: shop.id,
+      name: shop.name,
+      display_name: shop.display_name,
+      seller_name: shop.user.name
+    },
+    items: items_with_images
   }
 end
-# Add this helper method if not already present
-def generate_presigned_url(image)
-  s3_client = Aws::S3::Client.new(
-    access_key_id: ENV['R2_ACCESS_KEY_ID'],
-    secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
-    endpoint: ENV['R2_ENDPOINT'],
-    region: 'auto',
-    force_path_style: true
-  )
-  
-  signer = Aws::S3::Presigner.new(client: s3_client)
-  
-  signer.presigned_url(
-    :get_object,
-    bucket: ENV['R2_BUCKET_NAME'],
-    key: image.key,
-    expires_in: 3600
-  )
-rescue => e
-  Rails.logger.error "Failed to generate URL: #{e.message}"
-  nil
-end
-      # GET /api/v1/my-shop/items - Get current user's shop items (private)
+
+      # OPTIMIZED SHOW METHOD - NO N+1 QUERIES
+      def show
+        # Eager load everything needed
+        item = Item.includes(
+          :main_category, :sub_category, :gender, :school,
+          :province, :location, :brand, :item_condition, :tags,
+          shop: :user,
+          item_variants: [:size, :color, :condition]
+        ).find_by(id: params[:id], deleted: false)
+        track_item_view(item)
+        if item.nil?
+          return render json: { error: "Item not found" }, status: :not_found
+        end
+        
+        primary_variant = item.item_variants.find(&:is_active?)
+        
+        render json: {
+          success: true,
+          item: {
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            price: item.price.to_f,
+            quantity: item.quantity,
+            available_quantity: item.available_quantity,
+            status: item.status,
+            main_category: item.main_category&.as_json,
+            sub_category: item.sub_category&.as_json,
+            gender: item.gender&.as_json,
+            school: item.school&.as_json,
+            size: primary_variant&.size&.as_json,
+            color: primary_variant&.color&.as_json,
+            condition: primary_variant&.condition&.as_json || item.item_condition&.as_json,
+            brand: item.brand&.as_json,
+            province: item.province&.as_json,
+            town: item.location&.as_json,
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+            view_count: item.view_count,
+            shop: {
+              id: item.shop&.id,
+              name: item.shop&.name,
+              display_name: item.shop&.display_name,
+              seller_name: item.shop&.user&.name,
+              seller_mobile: item.shop&.user&.mobile
+            },
+            cover_photo: item.cover_photo,
+            images: item.all_image_urls,
+            tags: item.tags.as_json,
+            variants: item.item_variants.where(is_active: true).map do |variant|
+              {
+                id: variant.id,
+                size_id: variant.size_id,
+                size_name: variant.size&.name,
+                color_id: variant.color_id,
+                color_name: variant.color&.name,
+                condition_id: variant.condition_id,
+                condition_name: variant.condition&.name,
+                price: variant.price.to_f,
+                quantity: variant.quantity,
+                is_active: variant.is_active
+              }
+            end
+          }
+        }
+      end
+
       def my_shop_items
         shop = @current_user.shop
         
@@ -606,14 +563,15 @@ end
         end
         
         items = shop.items.where(deleted: false)
+                         .includes(:main_category, :sub_category, :gender, :school, :brand, :item_condition, :province, :location, :tags, item_variants: [:size, :color])
         
-        # Apply filters
         items = items.where(main_category_id: params[:main_category_id]) if params[:main_category_id].present?
         items = items.where(sub_category_id: params[:sub_category_id]) if params[:sub_category_id].present?
         items = items.where(status: params[:status]) if params[:status].present?
         
-        # Generate detailed info for each item
         items_with_details = items.map do |item|
+          primary_variant = item.item_variants.find(&:is_active?)
+          
           {
             id: item.id,
             name: item.name,
@@ -628,15 +586,15 @@ end
             sub_category_id: item.sub_category_id,
             gender: item.gender&.name,
             school: item.school&.name,
-            size: item.size&.name,
-            color: item.color&.name,
+            size: primary_variant&.size&.name,
+            color: primary_variant&.color&.name,
             brand: item.brand&.name,
             condition: item.item_condition&.name,
             province: item.province&.name,
             town: item.location&.name,
             created_at: item.created_at,
             updated_at: item.updated_at,
-            images: item.images.attached? ? generate_item_image_urls(item) : [],
+            images: item.all_image_urls,
             tags: item.tags.pluck(:name)
           }
         end
@@ -663,39 +621,55 @@ end
         render json: items
       end
 
-def viewShopItem
+      def viewShopItem
+  primary_variant = @item.item_variants.find(&:is_active?)
+  
   render json: {
     success: true,
     item: {
       id: @item.id,
       name: @item.name,
       description: @item.description,
-      price: @item.price,
+      price: primary_variant&.price&.to_f || 0.0,
+      total_quantity: primary_variant&.quantity || @item.total_quantity,
       status: @item.status,
       created_at: @item.created_at,
       updated_at: @item.updated_at,
-      
       shop: {
         id: @item.shop.id,
         name: @item.shop.name,
         seller_name: @item.shop.user.name,
         seller_mobile: @item.shop.user.mobile   
       },
-      
       main_category: { id: @item.main_category&.id, name: @item.main_category&.name },
       sub_category: { id: @item.sub_category&.id, name: @item.sub_category&.name },
       gender: { id: @item.gender&.id, name: @item.gender&.name },
       school: { id: @item.school&.id, name: @item.school&.name },
       province: { id: @item.province&.id, name: @item.province&.name },
+      town: { id: @item.location&.id, name: @item.location&.state_or_region || @item.location&.town&.name },  # ← ADD THIS
       brand: { id: @item.brand&.id, name: @item.brand&.name },
+      size: primary_variant&.size&.as_json(only: [:id, :name]),
+      color: primary_variant&.color&.as_json(only: [:id, :name]),
+      condition: primary_variant&.condition&.as_json(only: [:id, :name]),
       tags: @item.tags.map { |tag| { id: tag.id, name: tag.name } },
-      images: @item.images.attached? ? generate_item_image_urls(@item) : []
+      images: @item.all_image_urls,
+      variants: @item.item_variants.where(is_active: true).map do |variant|
+        {
+          id: variant.id,
+          size_id: variant.size_id,
+          size_name: variant.size&.name,
+          color_id: variant.color_id,
+          color_name: variant.color&.name,
+          condition_id: variant.condition_id,
+          condition_name: variant.condition&.name,
+          price: variant.price.to_f,
+          quantity: variant.quantity
+        }
+      end
     }
   }
 end
-
       def deleteItem
-        # Ensure user owns the item they're trying to delete
         if @item.shop.user_id != @current_user.id
           return render json: { 
             success: false,
@@ -717,7 +691,6 @@ end
       end
 
       def mark_as_sold
-        # Ensure user owns the item
         if @item.shop.user_id != @current_user.id
           return render json: { 
             success: false,
@@ -742,7 +715,6 @@ end
       def reserve_item
         item = Item.find(params[:id])
         
-        # Check if item is active and not deleted
         if item.deleted? || item.status != 'active'
           return render json: { 
             success: false,
@@ -818,7 +790,17 @@ end
       end
 
       private
-
+      def track_item_view(item)
+        # Call your existing tracking system
+        # This is already in RecommendationsController
+        UserItemView.track(
+          @current_user&.id,
+          item.id,
+          item.school_id,
+          'item_detail',
+          session.id
+        )
+      end
       def set_item
         @item = Item.find_by(id: params[:id], deleted: false)
         unless @item
@@ -829,15 +811,10 @@ end
         end
       end
 
-      # Helper methods for the comprehensive update
       def update_item_attributes
-        # Extract only the fields that are present and allowed
         update_data = item_params_for_update.to_h
-        
-        # Remove image-related fields from item attributes
         update_data.except!(:images, :tag_ids)
         
-        # Only update if there are actual fields to update
         if update_data.present?
           unless @item.update(update_data)
             raise StandardError, @item.errors.full_messages.join(", ")
@@ -846,28 +823,21 @@ end
       end
       
       def update_item_tags
-        # Remove duplicates
         unique_tag_ids = params[:item][:tag_ids].map(&:to_i).uniq
-        
-        # Clear existing tags
         @item.item_tags.destroy_all
         
-        # Add new tags
         unique_tag_ids.each do |tag_id|
           if Tag.exists?(id: tag_id)
             @item.item_tags.create!(tag_id: tag_id)
-            Rails.logger.info "Added tag #{tag_id} to item #{@item.id}"
           end
         end
       end
       
       def handle_image_operations
-        # Remove specific images by ID
         if params[:remove_image_ids].present?
           remove_specific_images
         end
         
-        # Add new images
         if params[:add_images].present?
           add_new_images
         end
@@ -880,9 +850,6 @@ end
           image = @item.images.find_by(id: image_id)
           if image
             image.purge
-            Rails.logger.info "Removed image #{image_id} from item #{@item.id}"
-          else
-            Rails.logger.warn "Image #{image_id} not found for item #{@item.id}"
           end
         end
       end
@@ -890,16 +857,13 @@ end
       def add_new_images
         new_images = Array(params[:add_images])
         
-        # Check if adding these would exceed limit
         total_after_add = @item.images.count + new_images.size
         if total_after_add > 3
           raise StandardError, "Cannot exceed 3 images total. Currently have #{@item.images.count}"
         end
         
-        # Upload new images
         results = ImageUploadService.upload_item_images(@item, new_images)
         
-        # Check for failures
         failed = results.select { |r| !r[:success] }
         if failed.any?
           raise StandardError, "Failed to upload images: #{failed.map { |f| f[:error] }.join(', ')}"
@@ -907,18 +871,14 @@ end
       end
       
       def handle_image_replacement
-        # Completely replace all images
         new_images = Array(params[:replace_images])
         
-        # Validate count
         if new_images.size > 3
           raise StandardError, "Cannot exceed 3 images"
         end
         
-        # Remove all existing images
         @item.images.purge
         
-        # Upload new images if any
         if new_images.any?
           results = ImageUploadService.upload_item_images(@item, new_images)
           
@@ -945,40 +905,42 @@ end
       end
       
       def format_item_response(item)
-        {
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          price: item.price.to_f,
-          quantity: item.quantity,
-          available_quantity: item.available_quantity,
-          status: item.status,
-          main_category_id: item.main_category_id,
-          main_category_name: item.main_category&.name,
-          sub_category_id: item.sub_category_id,
-          sub_category_name: item.sub_category&.name,
-          gender_id: item.gender_id,
-          gender_name: item.gender&.name,
-          school_id: item.school_id,
-          school_name: item.school&.name,
-          size_id: item.size_id,
-          size_name: item.size&.name,
-          color_id: item.color_id,
-          color_name: item.color&.name,
-          brand_id: item.brand_id,
-          brand_name: item.brand&.name,
-          condition_id: item.item_condition_id,
-          condition_name: item.item_condition&.name,
-          province_id: item.province_id,
-          province_name: item.province&.name,
-          town_id: item.location_id,
-          town_name: item.location&.state_or_region || item.location&.town&.name,
-          images: generate_item_image_urls(item),
-          tags: item.tags.map { |tag| { id: tag.id, name: tag.name } },
-          created_at: item.created_at,
-          updated_at: item.updated_at
-        }
-      end
+  primary_variant = item.item_variants.find(&:is_active?)
+  
+  {
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    price: primary_variant&.price&.to_f || item.price.to_f,
+    quantity: primary_variant&.quantity || item.quantity,
+    available_quantity: item.available_quantity,
+    status: item.status,
+    main_category_id: item.main_category_id,
+    main_category_name: item.main_category&.name,
+    sub_category_id: item.sub_category_id,
+    sub_category_name: item.sub_category&.name,
+    gender_id: item.gender_id,
+    gender_name: item.gender&.name,
+    school_id: item.school_id,
+    school_name: item.school&.name,
+    size_id: primary_variant&.size_id,  # ✅ Get from variant
+    size_name: primary_variant&.size&.name,  # ✅ Get from variant
+    color_id: primary_variant&.color_id,  # ✅ Get from variant
+    color_name: primary_variant&.color&.name,  # ✅ Get from variant
+    brand_id: item.brand_id,
+    brand_name: item.brand&.name,
+    condition_id: primary_variant&.condition_id,  # ✅ Get from variant
+    condition_name: primary_variant&.condition&.name,  # ✅ Get from variant
+    province_id: item.province_id,
+    province_name: item.province&.name,
+    town_id: item.location_id,
+    town_name: item.location&.state_or_region || item.location&.town&.name,
+    images: item.all_image_urls,
+    tags: item.tags.map { |tag| { id: tag.id, name: tag.name } },
+    created_at: item.created_at,
+    updated_at: item.updated_at
+  }
+end
 
       def generate_item_image_urls(item)
         return [] unless item.images.attached?
@@ -1012,6 +974,28 @@ end
             nil
           end
         end.compact
+      end
+      
+      def generate_presigned_url(image)
+        s3_client = Aws::S3::Client.new(
+          access_key_id: ENV['R2_ACCESS_KEY_ID'],
+          secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
+          endpoint: ENV['R2_ENDPOINT'],
+          region: 'auto',
+          force_path_style: true
+        )
+        
+        signer = Aws::S3::Presigner.new(client: s3_client)
+        
+        signer.presigned_url(
+          :get_object,
+          bucket: ENV['R2_BUCKET_NAME'],
+          key: image.key,
+          expires_in: 3600
+        )
+      rescue => e
+        Rails.logger.error "Failed to generate URL: #{e.message}"
+        nil
       end
     end
   end

@@ -30,7 +30,8 @@ gem 'sidekiq-cron'
 gem "redis", "~> 5.4"
 gem 'bcrypt', '~> 3.1.7'
 gem 'jwt'
-
+gem 'faraday', '~> 2.7'
+gem 'openssl', '~> 3.0'
 # Serializers
 gem 'jsonapi-serializer'
 gem 'active_model_serializers'
@@ -49,7 +50,7 @@ gem 'fcm'
 
 # Environment variables (MUST be at the top of groups)
 gem "dotenv-rails", "~> 3.1"
-
+gem 'firebase-admin-sdk'
 # AWS/R2 for file uploads
 gem 'aws-sdk-s3', '~> 1.0'
 gem 'down', '~> 5.0'
