@@ -132,7 +132,7 @@ Rails.application.routes.draw do
       get 'users/:user_id/ratings', to: 'users#user_ratings'
       put 'users/update_profile_picture', to: 'users#update_profile_picture'
       get 'users/:id', to: 'users#show'
-      
+      post 'auth/refresh', to: 'users#refresh_token'
       # ================================
       # 🏫 USER SCHOOL ROUTES
       # ================================

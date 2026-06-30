@@ -2,8 +2,8 @@
 require 'redis'
 
 class Api::V1::UsersController < ApplicationController
-before_action :authenticate_user, except: [:sign_in, :sign_up, :reactivate, :firebase_auth, :update_firebase_token]
-skip_before_action :verify_authenticity_token, only: [:sign_in, :sign_up, :reactivate, :update_mobile, :firebase_auth, :update_firebase_token]
+before_action :authenticate_user, except: [:sign_in,  :refresh_token ,:sign_up, :reactivate, :firebase_auth, :update_firebase_token]
+skip_before_action :verify_authenticity_token, only: [:sign_in, :refresh_token,:sign_up, :reactivate, :update_mobile, :firebase_auth, :update_firebase_token]
 
 def firebase_auth
   begin
@@ -25,22 +25,25 @@ def firebase_auth
       return render json: { error: "Invalid Firebase token" }, status: :unauthorized
     end
     
+    # ✅ Determine auth mode (supports all providers)
+    auth_mode = params[:auth_mode] || detect_auth_mode_from_firebase(firebase_user)
+    
     # Find or initialize user
     user = User.find_or_initialize_by(email: email)
     is_new_user = user.new_record?
     
-    # ✅ CHECK FOR SOFT-DELETED USER - Reactivate and clear school
+    # ✅ Handle soft-deleted users - Reactivate and clear school
     if user.persisted? && user.deleted?
       Rails.logger.info "🔄 Reactivating soft-deleted user: #{user.email}"
       
-      # Reactivate the user (this will clear school mappings)
+      # Reactivate the user (this clears school mappings)
       user.reactivate
       
       # Update user info
       user.update!(
         name: params[:name] || user.name,
         firebase_uid: firebase_user[:uid],
-        auth_mode: "firebase_email_password",
+        auth_mode: auth_mode,
         status: true
       )
       
@@ -48,12 +51,13 @@ def firebase_auth
       is_new_user = true # Treat as new user for onboarding
     end
     
+    # ✅ Handle new user creation
     if is_new_user && !user.persisted?
       # New user signup
       user.assign_attributes(
         name: params[:name] || firebase_user[:name] || email.split('@').first,
         firebase_uid: firebase_user[:uid],
-        auth_mode: "firebase_email_password",
+        auth_mode: auth_mode,
         status: true,
         deleted: false,
         role: 'user'
@@ -98,7 +102,7 @@ def firebase_auth
       Rails.logger.info "✅ Reactivated user ready for onboarding: #{user.email}"
       
     else
-      # Existing active user login
+      # ✅ Existing active user login
       if user.firebase_uid.blank?
         user.update(firebase_uid: firebase_user[:uid])
       end
@@ -108,14 +112,14 @@ def firebase_auth
       end
     end
     
-    # Create new session
+    # ✅ Create new session
     session = create_session_for(user)
     
     # Generate profile URL
     profile_url = generate_profile_url(user)
     
     # Log final status
-    Rails.logger.info "📊 User #{user.id} - school_mapped: #{user.school_mapped?}, deleted: #{user.deleted?}"
+    Rails.logger.info "📊 User #{user.id} - school_mapped: #{user.school_mapped?}, deleted: #{user.deleted?}, auth_mode: #{user.auth_mode}"
     
     render json: {
       success: true,
@@ -130,12 +134,77 @@ def firebase_auth
     Rails.logger.error "Firebase authentication error: #{e.message}"
     Rails.logger.error e.backtrace.join("\n")
     render json: { 
-      error: "Firebase authentication failed: #{e.message}" 
+      success: false,
+      error: "Firebase authentication failed: #{e.message}",
+      retryable: true  # ✅ Signal that client can retry
     }, status: :bad_request
   end
 end
 
 
+# POST /api/v1/auth/refresh
+def refresh_token
+  begin
+    token = request.headers["Authorization"]&.split(" ")&.last
+    
+    if token.blank?
+      return render json: { success: false, message: "Token is required" }, status: :unauthorized
+    end
+
+    session = UserSession.find_by(token: token)
+    
+    if session.nil?
+      return render json: { 
+        success: false, 
+        message: "Invalid token" 
+      }, status: :unauthorized
+    end
+
+    if session.expired?
+      session.destroy
+      return render json: { 
+        success: false, 
+        message: "Token has expired" 
+      }, status: :unauthorized
+    end
+
+    user = session.user
+
+    if user.deleted? || !user.status?
+      return render json: { 
+        success: false, 
+        message: "Account is inactive" 
+      }, status: :forbidden
+    end
+
+    # === KEY FIX: Create new session and return it ===
+    new_session = create_session_for(user)  # This already destroys old ones
+
+    profile_url = generate_profile_url(user)
+
+    render json: {
+      success: true,
+      message: "Token refreshed successfully",
+      token: new_session.token,
+      user: user_serializer(user, profile_url),
+      timestamp: Time.now.iso8601
+    }, status: :ok
+
+  rescue => e
+    Rails.logger.error "Token refresh error: #{e.message}"
+    render json: { success: false, message: "Token refresh failed" }, status: :internal_server_error
+  end
+end
+
+def create_session_for(user)
+  # Only destroy expired sessions, keep the current one if still valid
+  user.user_sessions.where("created_at < ?", 30.days.ago).destroy_all
+  
+  # Create new session (or reuse if you want)
+  session = user.user_sessions.create(token: SecureRandom.hex(16))
+  cache_user_data(user, session)
+  session
+end
 
 # POST /api/v1/users/firebase_token
   def update_firebase_token
@@ -495,7 +564,36 @@ def generate_wallet_number
     break number unless DigitalWallet.exists?(wallet_number: number)
   end
 end
-
+def detect_auth_mode_from_firebase(firebase_user)
+  # Check provider data from Firebase token
+  if firebase_user[:provider_id].present?
+    case firebase_user[:provider_id]
+    when "google.com"
+      return "google"
+    when "password"
+      return "email_password"
+    when "phone"
+      return "phone"
+    else
+      return "firebase"
+    end
+  end
+  
+  # Fallback: check if we have a Google ID token
+  if params[:id_token].present?
+    begin
+      # Decode token to check audience
+      decoded = JWT.decode(params[:id_token], nil, false)
+      if decoded[1]["aud"] == "google.com"
+        return "google"
+      end
+    rescue
+      # Ignore decode errors
+    end
+  end
+  
+  "firebase"
+end
 def verify_firebase_token(id_token)
   return nil if id_token.blank?
   

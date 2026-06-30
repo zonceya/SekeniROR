@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_08_215746) do
+ActiveRecord::Schema[8.0].define(version: 2026_06_29_223532) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -51,6 +51,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_215746) do
     t.datetime "date", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.integer "user_id"
     t.integer "status"
+    t.integer "duration_ms"
     t.check_constraint "request_type::text = ANY (ARRAY['GET'::character varying::text, 'POST'::character varying::text, 'PUT'::character varying::text, 'PATCH'::character varying::text, 'DELETE'::character varying::text])", name: "application_log_request_type_check"
   end
 
@@ -672,6 +673,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_08_215746) do
     t.jsonb "meta"
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "ended_at", precision: nil
+    t.datetime "expires_at"
     t.index ["token"], name: "index_user_sessions_on_token"
   end
 
