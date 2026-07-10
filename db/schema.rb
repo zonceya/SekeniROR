@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_06_29_223532) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -45,7 +45,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_29_223532) do
   create_table "application_logs", id: false, force: :cascade do |t|
     t.string "request_type", limit: 7, null: false
     t.string "endpoint_url", limit: 1024
-    t.text "request_header", null: false
+    t.text "request_header"
     t.text "request_object", null: false
     t.text "response_object", default: "{}", null: false
     t.datetime "date", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
@@ -691,6 +691,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_06_29_223532) do
     t.string "password_digest", limit: 255
     t.string "firebase_token"
     t.string "firebase_uid"
+    t.string "external_profile_picture_url"
     t.index ["auth_mode"], name: "index_users_on_auth_mode"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["firebase_uid"], name: "index_users_on_firebase_uid", unique: true

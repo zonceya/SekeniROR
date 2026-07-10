@@ -2,7 +2,6 @@ Rails.application.routes.draw do
   namespace :api do
     # ================================
     # ANDROID COMPATIBILITY ROUTES (without v1)
-    # These match what the Android app expects
     # ================================
     post 'auth/signup', to: 'v1/users#sign_up'
     
@@ -66,15 +65,29 @@ Rails.application.routes.draw do
           patch :mark_as_sold
           post :hold
           delete :release
+          post :attach_images_by_url 
           
           post 'images', to: 'items#add_images'
           delete 'images/:image_id', to: 'items#remove_image'
+          post '/uploads', to: 'uploads#create'
+          post 'attach_images_by_url', to: 'items#attach_images_by_url'
         end
       end
       
       # ================================
-      # 🎯 RECOMMENDATIONS ROUTES
+      # 🎯 RECOMMENDATIONS ROUTES (UPDATED WITH RANKING)
       # ================================
+      
+      # === NEW: RANKED ENDPOINTS (USE THESE!) ===
+      get 'recommendations/uniform/ranked', to: 'recommendations#uniform_ranked'
+      get 'recommendations/sport/ranked', to: 'recommendations#sport_ranked'
+      get 'recommendations/recommended/ranked', to: 'recommendations#recommended_ranked'
+      get 'recommendations/essentials/ranked', to: 'recommendations#essentials_ranked'
+      get 'recommendations/trending/ranked', to: 'recommendations#trending_ranked'
+      get 'recommendations/recent/ranked', to: 'recommendations#recent_ranked'
+      get 'recommendations/search/ranked', to: 'recommendations#search_ranked'
+      
+      # === LEGACY: KEEP FOR BACKWARD COMPATIBILITY (DEPRECATED) ===
       get 'recommendations/home', to: 'recommendations#home'
       get 'recommendations/uniform', to: 'recommendations#uniform'
       get 'recommendations/sport', to: 'recommendations#sport'
@@ -84,6 +97,7 @@ Rails.application.routes.draw do
       get 'recommendations/trending/all', to: 'recommendations#trending_all'
       get 'recommendations/recent/all', to: 'recommendations#recent_all'
       
+      # === TRACKING (KEEP) ===
       post 'recommendations/track_view', to: 'recommendations#track_view'
       post 'recommendations/track_click', to: 'recommendations#track_click'
       
@@ -116,14 +130,13 @@ Rails.application.routes.draw do
       get '/towns', to: 'towns#index'
       
       # ================================
-      # 👤 USER ROUTES (v1 API)
+      # 👤 USER ROUTES
       # ================================
       post 'users/sign_in', to: 'users#sign_in'
       post 'users/signup', to: 'users#sign_up'
-      
-      # 🔥 FIREBASE AUTHENTICATION ROUTES (ADD THESE)
       post 'users/firebase_auth', to: 'users#firebase_auth'
       post 'users/firebase_token', to: 'users#update_firebase_token'    
+      post 'auth/refresh', to: 'users#refresh_token' 
       
       get 'users/profile', to: 'users#profile'
       put 'users/update_mobile', to: 'users#update_mobile'
@@ -132,7 +145,7 @@ Rails.application.routes.draw do
       get 'users/:user_id/ratings', to: 'users#user_ratings'
       put 'users/update_profile_picture', to: 'users#update_profile_picture'
       get 'users/:id', to: 'users#show'
-      post 'auth/refresh', to: 'users#refresh_token'
+      
       # ================================
       # 🏫 USER SCHOOL ROUTES
       # ================================

@@ -7,7 +7,7 @@ module Api
       
       before_action :set_item, only: [
         :viewShopItem, :updateItem, :deleteItem, 
-        :mark_as_sold, :add_images, :remove_image
+        :mark_as_sold, :add_images, :remove_image,:attach_images_by_url 
       ]
       
       def index
@@ -312,39 +312,158 @@ module Api
         )
       end
 
-      def add_images
-        item = Item.find_by(id: params[:id], deleted: false)
-        
-        if item.nil?
-          return render json: { error: "Item not found" }, status: :not_found
-        end
-        
-        if item.shop.user_id != @current_user.id
-          return render json: { error: "Not authorized" }, status: :unauthorized
-        end
-        
-        unless params[:images].present?
-          return render json: { error: "No images provided" }, status: :unprocessable_entity
-        end
-        
-        total_images = item.images.count + Array(params[:images]).count
-        if total_images > 3
-          return render json: { 
-            error: "Cannot add images. Maximum 3 images allowed. Current: #{item.images.count}" 
-          }, status: :unprocessable_entity
-        end
-        
-        image_upload_results = ImageUploadService.upload_item_images(item, params[:images])
-        image_urls = item.reload.images.attached? ? generate_item_image_urls(item) : []
-        
-        render json: {
-          success: true,
-          message: "Images added successfully",
-          total_images: item.images.count,
-          images: image_urls
-        }, status: :ok
-      end
+     # ✅ FIXED: Use params[:id] consistently
+  def add_images
+    item = Item.find_by(id: params[:id], deleted: false)  # ← Changed from params[:id] (already correct)
+    
+    if item.nil?
+      return render json: { 
+        success: false,
+        error: "Item not found" 
+      }, status: :not_found
+    end
+    
+    if item.shop.user_id != @current_user.id
+      return render json: { 
+        success: false,
+        error: "Not authorized" 
+      }, status: :unauthorized
+    end
+    
+    unless params[:images].present?
+      return render json: { 
+        success: false,
+        error: "No images provided" 
+      }, status: :unprocessable_entity
+    end
+    
+    total_images = item.images.count + Array(params[:images]).count
+    if total_images > 3
+      return render json: { 
+        success: false,
+        error: "Cannot add images. Maximum 3 images allowed. Current: #{item.images.count}" 
+      }, status: :unprocessable_entity
+    end
+    
+    begin
+      image_upload_results = ImageUploadService.upload_item_images(item, params[:images])
+      item.reload
+      image_urls = item.images.attached? ? generate_item_image_urls(item) : []
+      
+      render json: {
+        success: true,
+        message: "Images added successfully",
+        total_images: item.images.count,
+        images: image_urls
+      }, status: :ok
+    rescue => e
+      Rails.logger.error "❌ Image upload failed: #{e.message}"
+      render json: {
+        success: false,
+        error: "Image upload failed: #{e.message}"
+      }, status: :internal_server_error
+    end
+  end
+# app/controllers/api/v1/items_controller.rb
 
+# ✅ FIXED: Use params[:id] consistently
+def attach_images_by_url
+  item = Item.find_by(id: params[:id], deleted: false)  # ← Changed from params[:item_id]
+  
+  if item.nil?
+    return render json: { 
+      success: false,
+      error: "Item not found" 
+    }, status: :not_found
+  end
+  
+  # Check authorization
+  if item.shop.user_id != @current_user.id
+    return render json: { 
+      success: false,
+      error: "Not authorized" 
+    }, status: :unauthorized
+  end
+  
+  # Get image URLs from params
+  image_urls = params[:image_urls] || []
+  
+  if image_urls.empty?
+    return render json: { 
+      success: false,
+      error: "No image URLs provided" 
+    }, status: :unprocessable_entity
+  end
+  
+  # Check image limit
+  total_images = item.images.count + image_urls.size
+  if total_images > 3
+    return render json: { 
+      success: false,
+      error: "Cannot exceed 3 images total. Current: #{item.images.count}" 
+    }, status: :unprocessable_entity
+  end
+  
+  attached_images = []
+  failed_images = []
+  
+  image_urls.each_with_index do |url, index|
+    begin
+      # Download image from URL
+      downloaded_image = URI.open(url)
+      
+      # Generate filename
+      filename = File.basename(URI.parse(url).path)
+      if filename.blank? || !filename.include?('.')
+        filename = "image_#{index + 1}.jpg"
+      end
+      
+      # Attach to ActiveStorage
+      item.images.attach(
+        io: downloaded_image,
+        filename: filename,
+        content_type: downloaded_image.content_type || "image/jpeg"
+      )
+      
+      attached_images << {
+        url: url,
+        filename: filename,
+        id: item.images.last.id
+      }
+      
+      Rails.logger.info "✅ Attached image #{index + 1}: #{filename}"
+      
+    rescue OpenURI::HTTPError => e
+      error_msg = "HTTP error: #{e.message}"
+      Rails.logger.error "❌ Failed to download image from #{url}: #{error_msg}"
+      failed_images << { url: url, error: error_msg }
+      
+    rescue SocketError => e
+      error_msg = "Network error: #{e.message}"
+      Rails.logger.error "❌ Network error for #{url}: #{error_msg}"
+      failed_images << { url: url, error: error_msg }
+      
+    rescue => e
+      error_msg = "Unknown error: #{e.message}"
+      Rails.logger.error "❌ Failed to attach image from #{url}: #{error_msg}"
+      failed_images << { url: url, error: error_msg }
+    end
+  end
+  
+  # Reload item to get fresh image associations
+  item.reload
+  
+  render json: {
+    success: true,
+    message: "Attached #{attached_images.size} images",
+    attached_count: attached_images.size,
+    failed_count: failed_images.size,
+    attached_images: attached_images,
+    failed_images: failed_images,
+    total_images: item.images.count,
+    images: generate_item_image_urls(item)
+  }, status: :ok
+end
       def remove_image
         item = Item.find_by(id: params[:id], deleted: false)
         
@@ -801,15 +920,17 @@ end
           session.id
         )
       end
-      def set_item
-        @item = Item.find_by(id: params[:id], deleted: false)
-        unless @item
-          render json: { 
-            success: false,
-            error: "Item not found" 
-          }, status: :not_found
-        end
-      end
+     def set_item
+  @item = Item.find_by(id: params[:id], deleted: false)
+  
+  unless @item
+    render json: { 
+      success: false,
+      error: "Item not found" 
+    }, status: :not_found
+    return false
+  end
+end
 
       def update_item_attributes
         update_data = item_params_for_update.to_h
