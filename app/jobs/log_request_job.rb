@@ -30,8 +30,7 @@ class LogRequestJob < ApplicationJob
       duration_ms: final_duration,
       request_header: sanitized_headers,
       request_object: truncate_request(request_object),
-      response_object: safe_response_object,
-      created_at: Time.current
+      response_object: safe_response_object
     )
   rescue => e
     # Fail silently - don't let logging errors affect main request

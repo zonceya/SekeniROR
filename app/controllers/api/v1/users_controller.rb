@@ -2,226 +2,200 @@
 require 'redis'
 
 class Api::V1::UsersController < ApplicationController
-before_action :authenticate_user, except: [:sign_in,  :refresh_token ,:sign_up, :reactivate, :firebase_auth, :update_firebase_token]
-skip_before_action :verify_authenticity_token, only: [:sign_in, :refresh_token,:sign_up, :reactivate, :update_mobile, :firebase_auth, :update_firebase_token]
+  before_action :authenticate_user, except: [:sign_in, :refresh_token, :sign_up, :reactivate, :firebase_auth, :update_firebase_token]
+  skip_before_action :verify_authenticity_token, only: [:sign_in, :refresh_token, :sign_up, :reactivate, :update_mobile, :firebase_auth, :update_firebase_token]
 
-def firebase_auth
-  begin
-    # Validate required params
-    if params[:id_token].blank?
-      return render json: { error: "Firebase ID token is required" }, status: :bad_request
-    end
-    
-    if params[:email].blank?
-      return render json: { error: "Email is required" }, status: :bad_request
-    end
-    
-    email = params[:email].downcase.strip
-    
-    # Verify Firebase token
-    firebase_user = FirebaseTokenVerifier.verify(params[:id_token])
-    
-    unless firebase_user && firebase_user[:email].downcase == email
-      return render json: { error: "Invalid Firebase token" }, status: :unauthorized
-    end
-    
-    # ✅ Determine auth mode (supports all providers)
-    auth_mode = params[:auth_mode] || detect_auth_mode_from_firebase(firebase_user)
-    
-    # Find or initialize user
-    user = User.find_or_initialize_by(email: email)
-    is_new_user = user.new_record?
-    
-    # ✅ Handle soft-deleted users - Reactivate and clear school
-    if user.persisted? && user.deleted?
-      Rails.logger.info "🔄 Reactivating soft-deleted user: #{user.email}"
-      
-      # Reactivate the user (this clears school mappings)
-      user.reactivate
-      
-      # Update user info
-      user.update!(
-        name: params[:name] || user.name,
-        firebase_uid: firebase_user[:uid],
-        auth_mode: auth_mode,
-        status: true
-      )
-      
-      Rails.logger.info "✅ User reactivated with school mappings cleared"
-      is_new_user = true # Treat as new user for onboarding
-    end
-    
-    # ✅ Handle new user creation
-    if is_new_user && !user.persisted?
-      # New user signup
-      user.assign_attributes(
-        name: params[:name] || firebase_user[:name] || email.split('@').first,
-        firebase_uid: firebase_user[:uid],
-        auth_mode: auth_mode,
-        status: true,
-        deleted: false,
-        role: 'user'
-      )
-      
-      unless user.save
-        return render json: { 
-          error: "Unable to create user: #{user.errors.full_messages.join(', ')}" 
-        }, status: :unprocessable_entity
+  # ==================== AUTHENTICATION METHODS ====================
+
+  def firebase_auth
+    begin
+      # Validate required params
+      if params[:id_token].blank?
+        return render json: { error: "Firebase ID token is required" }, status: :bad_request
       end
       
-      # Create associated records
-      user.create_profile! unless user.profile
+      if params[:email].blank?
+        return render json: { error: "Email is required" }, status: :bad_request
+      end
       
-      unless user.shop
-        user.create_shop!(
-          name: "#{user.name}'s Shop", 
-          description: "Shop for #{user.name}"
+      email = params[:email].downcase.strip
+      
+      # Verify Firebase token
+      firebase_user = FirebaseTokenVerifier.verify(params[:id_token])
+      
+      unless firebase_user && firebase_user[:email].downcase == email
+        return render json: { error: "Invalid Firebase token" }, status: :unauthorized
+      end
+      
+      # ✅ Determine auth mode (supports all providers)
+      auth_mode = params[:auth_mode] || detect_auth_mode_from_firebase(firebase_user)
+      
+      # Find or initialize user
+      user = User.find_or_initialize_by(email: email)
+      is_new_user = user.new_record?
+      
+      # ✅ Handle soft-deleted users - Reactivate and clear school
+      if user.persisted? && user.deleted?
+        Rails.logger.info "🔄 Reactivating soft-deleted user: #{user.email}"
+        
+        # Reactivate the user (this clears school mappings)
+        user.reactivate
+        
+        # Update user info
+        user.update!(
+          name: params[:name] || user.name,
+          firebase_uid: firebase_user[:uid],
+          auth_mode: auth_mode,
+          status: true,
+          external_profile_picture_url: params[:profile_picture_url].presence
         )
+        
+        Rails.logger.info "✅ User reactivated with school mappings cleared"
+        is_new_user = true # Treat as new user for onboarding
       end
       
-      # Create digital wallet
-      unless user.digital_wallet
-        user.create_digital_wallet!(
-          wallet_number: generate_wallet_number,
-          current_balance: 0.0,
-          pending_balance: 0.0
+      # ✅ Handle new user creation
+      if is_new_user && !user.persisted?
+        # New user signup - store external URL directly
+        user.assign_attributes(
+          name: params[:name] || firebase_user[:name] || email.split('@').first,
+          firebase_uid: firebase_user[:uid],
+          auth_mode: auth_mode,
+          status: true,
+          deleted: false,
+          role: 'user',
+          external_profile_picture_url: params[:profile_picture_url].presence
         )
-      end
-      
-      # Handle profile picture if provided
-      if params[:profile_picture_url].present?
-        begin
-          ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
-        rescue => e
-          Rails.logger.error "Profile upload failed (continuing anyway): #{e.message}"
+        
+        unless user.save
+          return render json: { 
+            error: "Unable to create user: #{user.errors.full_messages.join(', ')}" 
+          }, status: :unprocessable_entity
+        end
+        
+        # Create associated records
+        user.create_profile! unless user.profile
+        
+        unless user.shop
+          user.create_shop!(
+            name: "#{user.name}'s Shop", 
+            description: "Shop for #{user.name}"
+          )
+        end
+        
+        # Create digital wallet
+        unless user.digital_wallet
+          user.create_digital_wallet!(
+            wallet_number: generate_wallet_number,
+            current_balance: 0.0,
+            pending_balance: 0.0
+          )
+        end
+        
+        # ✅ No ImageUploadService call - using external URL directly
+        
+      elsif is_new_user && user.persisted?
+        # Reactivated user case - already handled above
+        Rails.logger.info "✅ Reactivated user ready for onboarding: #{user.email}"
+        
+      else
+        # ✅ Existing active user login - UPDATE PROFILE PICTURE
+        if user.firebase_uid.blank?
+          user.update(firebase_uid: firebase_user[:uid])
+        end
+        
+        if params[:name].present? && user.name != params[:name]
+          user.update(name: params[:name])
+        end
+        
+        # ✅ CRITICAL FIX: Update profile picture on every login
+        incoming_url = params[:profile_picture_url].presence
+        if incoming_url.present? && incoming_url != user.external_profile_picture_url
+          user.update(external_profile_picture_url: incoming_url)
+          Rails.logger.info "📸 Updated profile picture for user #{user.id}: #{incoming_url}"
         end
       end
       
-    elsif is_new_user && user.persisted?
-      # Reactivated user case - already handled above
-      Rails.logger.info "✅ Reactivated user ready for onboarding: #{user.email}"
+      # ✅ Create new session
+      session = create_session_for(user)
       
-    else
-      # ✅ Existing active user login
-      if user.firebase_uid.blank?
-        user.update(firebase_uid: firebase_user[:uid])
-      end
+      # Generate profile URL
+      profile_url = generate_profile_url(user)
       
-      if params[:name].present? && user.name != params[:name]
-        user.update(name: params[:name])
+      # Log final status
+      Rails.logger.info "📊 User #{user.id} - school_mapped: #{user.school_mapped?}, deleted: #{user.deleted?}, auth_mode: #{user.auth_mode}"
+      
+      render json: {
+        success: true,
+        message: is_new_user ? "Account created successfully!" : "Welcome back!",
+        is_new_user: is_new_user,
+        user: user_serializer(user, profile_url),
+        token: session.token,
+        timestamp: Time.now.iso8601
+      }, status: :ok
+      
+    rescue => e
+      Rails.logger.error "Firebase authentication error: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      render json: { 
+        success: false,
+        error: "Firebase authentication failed: #{e.message}",
+        retryable: true
+      }, status: :bad_request
+    end
+  end
+
+  # POST /api/v1/auth/refresh
+  def refresh_token
+    begin
+      token = request.headers["Authorization"]&.split(" ")&.last
+      
+      if token.blank?
+        return render json: { success: false, message: "Token is required" }, status: :unauthorized
       end
-    end
-    
-    # ✅ Create new session
-    session = create_session_for(user)
-    
-    # Generate profile URL
-    profile_url = generate_profile_url(user)
-    
-    # Log final status
-    Rails.logger.info "📊 User #{user.id} - school_mapped: #{user.school_mapped?}, deleted: #{user.deleted?}, auth_mode: #{user.auth_mode}"
-    
-    render json: {
-      success: true,
-      message: is_new_user ? "Account created successfully!" : "Welcome back!",
-      is_new_user: is_new_user,
-      user: user_serializer(user, profile_url),
-      token: session.token,
-      timestamp: Time.now.iso8601
-    }, status: :ok
-    
-  rescue => e
-    Rails.logger.error "Firebase authentication error: #{e.message}"
-    Rails.logger.error e.backtrace.join("\n")
-    render json: { 
-      success: false,
-      error: "Firebase authentication failed: #{e.message}",
-      retryable: true  # ✅ Signal that client can retry
-    }, status: :bad_request
-  end
-end
 
+      session = UserSession.find_by(token: token)
+      
+      if session.nil?
+        return render json: { 
+          success: false, 
+          message: "Invalid token" 
+        }, status: :unauthorized
+      end
 
-# POST /api/v1/auth/refresh
-def refresh_token
-  begin
-    token = request.headers["Authorization"]&.split(" ")&.last
-    
-    if token.blank?
-      return render json: { success: false, message: "Token is required" }, status: :unauthorized
-    end
+      if session.expired?
+        session.destroy
+        return render json: { 
+          success: false, 
+          message: "Token has expired" 
+        }, status: :unauthorized
+      end
 
-    session = UserSession.find_by(token: token)
-    
-    if session.nil?
-      return render json: { 
-        success: false, 
-        message: "Invalid token" 
-      }, status: :unauthorized
-    end
+      user = session.user
 
-    if session.expired?
-      session.destroy
-      return render json: { 
-        success: false, 
-        message: "Token has expired" 
-      }, status: :unauthorized
-    end
+      if user.deleted? || !user.status?
+        return render json: { 
+          success: false, 
+          message: "Account is inactive" 
+        }, status: :forbidden
+      end
 
-    user = session.user
+      # Create new session
+      new_session = create_session_for(user)
 
-    if user.deleted? || !user.status?
-      return render json: { 
-        success: false, 
-        message: "Account is inactive" 
-      }, status: :forbidden
-    end
+      profile_url = generate_profile_url(user)
 
-    # === KEY FIX: Create new session and return it ===
-    new_session = create_session_for(user)  # This already destroys old ones
+      render json: {
+        success: true,
+        message: "Token refreshed successfully",
+        token: new_session.token,
+        user: user_serializer(user, profile_url),
+        timestamp: Time.now.iso8601
+      }, status: :ok
 
-    profile_url = generate_profile_url(user)
-
-    render json: {
-      success: true,
-      message: "Token refreshed successfully",
-      token: new_session.token,
-      user: user_serializer(user, profile_url),
-      timestamp: Time.now.iso8601
-    }, status: :ok
-
-  rescue => e
-    Rails.logger.error "Token refresh error: #{e.message}"
-    render json: { success: false, message: "Token refresh failed" }, status: :internal_server_error
-  end
-end
-
-def create_session_for(user)
-  # Only destroy expired sessions, keep the current one if still valid
-  user.user_sessions.where("created_at < ?", 30.days.ago).destroy_all
-  
-  # Create new session (or reuse if you want)
-  session = user.user_sessions.create(token: SecureRandom.hex(16))
-  cache_user_data(user, session)
-  session
-end
-
-# POST /api/v1/users/firebase_token
-  def update_firebase_token
-    unless params[:token].present?
-      return render json: { error: "Firebase token is required" }, status: :unprocessable_entity
-    end
-
-    if @current_user.update(firebase_token: params[:token])
-      render json: { 
-        message: 'Firebase token updated successfully',
-        firebase_token: @current_user.firebase_token
-      }
-    else
-      render json: { 
-        error: 'Failed to update firebase token',
-        details: @current_user.errors.full_messages 
-      }, status: :unprocessable_entity
+    rescue => e
+      Rails.logger.error "Token refresh error: #{e.message}"
+      render json: { success: false, message: "Token refresh failed" }, status: :internal_server_error
     end
   end
 
@@ -240,31 +214,29 @@ end
         auth_mode: params[:auth_mode] || "email",
         status: true,
         deleted: false,
-        role: 'user'
+        role: 'user',
+        external_profile_picture_url: params[:profile_picture_url].presence
       )
       
       unless user.save
         return render json: { error: "Unable to create user" }, status: :unprocessable_entity
       end
       
-      if params[:profile_picture_url].present?
-        begin
-          ImageUploadService.upload_user_profile(user, params[:profile_picture_url])
-        rescue => e
-          Rails.logger.error "Profile upload failed (continuing anyway): #{e.message}"
-        end
+      # ✅ No ImageUploadService call - using external URL directly
+    else
+      # ✅ Existing user - update profile picture if changed
+      incoming_url = params[:profile_picture_url].presence
+      if incoming_url.present? && incoming_url != user.external_profile_picture_url
+        user.update(external_profile_picture_url: incoming_url)
+      end
+      
+      if params[:name].present? && user.name != params[:name]
+        user.update(name: params[:name])
       end
     end
 
     session = create_session_for(user)
-
-    profile_url = if user.profile_picture.attached?
-                    generate_profile_url(user)
-                  elsif params[:profile_picture_url].present?
-                    params[:profile_picture_url]
-                  else
-                    nil
-                  end
+    profile_url = generate_profile_url(user)
 
     render json: {
       success: true,
@@ -289,89 +261,108 @@ end
     }, status: :ok
   end
 
+  # POST /api/v1/users/sign_up
+  def sign_up
+    begin
+      raise "Name is required" if params[:name].blank?
+      raise "Email is required" if params[:email].blank?
+      raise "Password is required" if params[:password].blank?
+      raise "Password confirmation is required" if params[:password_confirmation].blank?
+      raise "Passwords do not match" if params[:password] != params[:password_confirmation]
+      raise "Invalid email format" unless params[:email].match?(URI::MailTo::EMAIL_REGEXP)
 
-# app/controllers/api/v1/users_controller.rb
+      email = params[:email].downcase.strip
 
-def sign_up
-  begin
-    raise "Name is required" if params[:name].blank?
-    raise "Email is required" if params[:email].blank?
-    raise "Password is required" if params[:password].blank?
-    raise "Password confirmation is required" if params[:password_confirmation].blank?
-    raise "Passwords do not match" if params[:password] != params[:password_confirmation]
-    raise "Invalid email format" unless params[:email].match?(URI::MailTo::EMAIL_REGEXP)
-
-    email = params[:email].downcase.strip
-
-    # Check if user already exists
-    existing_user = User.find_by(email: email)
-    
-    if existing_user
-      # If user exists, send OTP for login
-           
-      return render json: {
-        success: true,
-        message: "Account already exists. OTP sent for login.",
-        data: {
-          otp_token: existing_user.otp_token,
-          email: email,
-          purpose: "LOGIN",
-          otp_code: (Rails.env.development? ? otp_code : nil)
-        }
-      }, status: :ok
-    end
-
-    # Create new user
-    user = User.new(
-      name: params[:name],
-      email: email,
-      password: params[:password],
-      password_confirmation: params[:password_confirmation],
-      auth_mode: "email",
-      status: true,
-      deleted: false,
-      role: 'user'
-    )
-
-    if user.save
-      # Create profile, shop, and wallet
-      user.create_profile! unless user.profile
-      user.create_shop!(name: "#{user.name}'s Shop", description: "Shop for #{user.name}") unless user.shop
+      # Check if user already exists
+      existing_user = User.find_by(email: email)
       
-      # ✅ GENERATE OTP FOR SIGNUP
-      otp_code = user.generate_otp('signup')
-      
-      # ✅ SEND OTP EMAIL
-      OtpMailer.send_login_otp(email, otp_code).deliver_now
-      
-      # Create session
-      session = user.user_sessions.create(token: SecureRandom.hex(16))
-      
-      render json: {
-        success: true,
-        message: "Account created successfully! Please verify your email.",
-        data: {
-          otp_token: user.otp_token,
-          email: email,
-          purpose: "SIGNUP",
-          otp_code: (Rails.env.development? ? otp_code : nil)
-        }
-      }, status: :created
-    else
+      if existing_user
+        # If user exists, send OTP for login
+        otp_code = existing_user.generate_otp('login')
+        OtpMailer.send_login_otp(email, otp_code).deliver_now
+        
+        return render json: {
+          success: true,
+          message: "Account already exists. OTP sent for login.",
+          data: {
+            otp_token: existing_user.otp_token,
+            email: email,
+            purpose: "LOGIN",
+            otp_code: (Rails.env.development? ? otp_code : nil)
+          }
+        }, status: :ok
+      end
+
+      # Create new user
+      user = User.new(
+        name: params[:name],
+        email: email,
+        password: params[:password],
+        password_confirmation: params[:password_confirmation],
+        auth_mode: "email",
+        status: true,
+        deleted: false,
+        role: 'user'
+      )
+
+      if user.save
+        # Create profile, shop, and wallet
+        user.create_profile! unless user.profile
+        user.create_shop!(name: "#{user.name}'s Shop", description: "Shop for #{user.name}") unless user.shop
+        
+        # Generate OTP for signup
+        otp_code = user.generate_otp('signup')
+        
+        # Send OTP email
+        OtpMailer.send_login_otp(email, otp_code).deliver_now
+        
+        # Create session
+        session = user.user_sessions.create(token: SecureRandom.hex(16))
+        
+        render json: {
+          success: true,
+          message: "Account created successfully! Please verify your email.",
+          data: {
+            otp_token: user.otp_token,
+            email: email,
+            purpose: "SIGNUP",
+            otp_code: (Rails.env.development? ? otp_code : nil)
+          }
+        }, status: :created
+      else
+        render json: { 
+          success: false, 
+          message: "Failed to create account", 
+          errors: user.errors.full_messages 
+        }, status: :unprocessable_entity
+      end
+    rescue => e
       render json: { 
         success: false, 
-        message: "Failed to create account", 
-        errors: user.errors.full_messages 
+        message: e.message 
+      }, status: :bad_request
+    end
+  end
+
+  # POST /api/v1/users/firebase_token
+  def update_firebase_token
+    unless params[:token].present?
+      return render json: { error: "Firebase token is required" }, status: :unprocessable_entity
+    end
+
+    if @current_user.update(firebase_token: params[:token])
+      render json: { 
+        message: 'Firebase token updated successfully',
+        firebase_token: @current_user.firebase_token
+      }
+    else
+      render json: { 
+        error: 'Failed to update firebase token',
+        details: @current_user.errors.full_messages 
       }, status: :unprocessable_entity
     end
-  rescue => e
-    render json: { 
-      success: false, 
-      message: e.message 
-    }, status: :bad_request
   end
-end
-  
+
   # ==================== PROFILE METHODS ====================
 
   # GET /api/v1/users/profile
@@ -502,25 +493,6 @@ end
     end
   end
 
-  # POST /api/v1/users/firebase_token
-  def update_firebase_token
-    unless params[:token].present?
-      return render json: { error: "Firebase token is required" }, status: :unprocessable_entity
-    end
-
-    if @current_user.update(firebase_token: params[:token])
-      render json: { 
-        message: 'Firebase token updated successfully',
-        firebase_token: @current_user.firebase_token
-      }
-    else
-      render json: { 
-        error: 'Failed to update firebase token',
-        details: @current_user.errors.full_messages 
-      }, status: :unprocessable_entity
-    end
-  end
-
   # ==================== CHAT METHODS ====================
 
   # GET /api/v1/users/chat_rooms
@@ -557,85 +529,80 @@ end
 
   private
 
+  def generate_wallet_number
+    loop do
+      number = "SW#{Time.now.to_i}#{rand(1000..9999)}"
+      break number unless DigitalWallet.exists?(wallet_number: number)
+    end
+  end
 
-def generate_wallet_number
-  loop do
-    number = "SW#{Time.now.to_i}#{rand(1000..9999)}"
-    break number unless DigitalWallet.exists?(wallet_number: number)
-  end
-end
-def detect_auth_mode_from_firebase(firebase_user)
-  # Check provider data from Firebase token
-  if firebase_user[:provider_id].present?
-    case firebase_user[:provider_id]
-    when "google.com"
-      return "google"
-    when "password"
-      return "email_password"
-    when "phone"
-      return "phone"
-    else
-      return "firebase"
-    end
-  end
-  
-  # Fallback: check if we have a Google ID token
-  if params[:id_token].present?
-    begin
-      # Decode token to check audience
-      decoded = JWT.decode(params[:id_token], nil, false)
-      if decoded[1]["aud"] == "google.com"
+  def detect_auth_mode_from_firebase(firebase_user)
+    # Check provider data from Firebase token
+    if firebase_user[:provider_id].present?
+      case firebase_user[:provider_id]
+      when "google.com"
         return "google"
+      when "password"
+        return "email_password"
+      when "phone"
+        return "phone"
+      else
+        return "firebase"
       end
-    rescue
-      # Ignore decode errors
+    end
+    
+    # Fallback: check if we have a Google ID token
+    if params[:id_token].present?
+      begin
+        decoded = JWT.decode(params[:id_token], nil, false)
+        if decoded[1]["aud"] == "google.com"
+          return "google"
+        end
+      rescue
+        # Ignore decode errors
+      end
+    end
+    
+    "firebase"
+  end
+
+  def verify_firebase_token(id_token)
+    return nil if id_token.blank?
+    
+    firebase_config = JSON.parse(File.read(Rails.root.join('config/firebase-service-account.json')))
+    project_id = firebase_config['project_id']
+    
+    begin
+      unverified = JWT.decode(id_token, nil, false)
+      kid = unverified[1]['kid']
+      
+      cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+      response = Faraday.get(cert_url)
+      certs = JSON.parse(response.body)
+      
+      public_key = OpenSSL::X509::Certificate.new(certs[kid]).public_key
+      
+      decoded = JWT.decode(id_token, public_key, true, {
+        algorithm: 'RS256',
+        iss: "https://securetoken.google.com/#{project_id}",
+        aud: project_id,
+        verify_iss: true,
+        verify_aud: true,
+        verify_expiration: true
+      })
+      
+      payload = decoded[0]
+      
+      {
+        uid: payload['sub'],
+        email: payload['email'],
+        email_verified: payload['email_verified']
+      }
+    rescue => e
+      Rails.logger.error "Firebase token verification failed: #{e.message}"
+      nil
     end
   end
-  
-  "firebase"
-end
-def verify_firebase_token(id_token)
-  return nil if id_token.blank?
-  
-  # Load from JSON file instead of ENV
-  firebase_config = JSON.parse(File.read(Rails.root.join('config/firebase-service-account.json')))
-  project_id = firebase_config['project_id']
-  
-  begin
-    # Decode token without verification to get the key ID
-    unverified = JWT.decode(id_token, nil, false)
-    kid = unverified[1]['kid']
-    
-    # Fetch public keys from Firebase
-    cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
-    response = Faraday.get(cert_url)
-    certs = JSON.parse(response.body)
-    
-    # Get the public key
-    public_key = OpenSSL::X509::Certificate.new(certs[kid]).public_key
-    
-    # Verify the token
-    decoded = JWT.decode(id_token, public_key, true, {
-      algorithm: 'RS256',
-      iss: "https://securetoken.google.com/#{project_id}",
-      aud: project_id,
-      verify_iss: true,
-      verify_aud: true,
-      verify_expiration: true
-    })
-    
-    payload = decoded[0]
-    
-    {
-      uid: payload['sub'],
-      email: payload['email'],
-      email_verified: payload['email_verified']
-    }
-  rescue => e
-    Rails.logger.error "Firebase token verification failed: #{e.message}"
-    nil
-  end
-end
 
   def mask_email(email)
     local_part, domain = email.split('@')
@@ -693,9 +660,13 @@ end
     end
   end
   
+  # ✅ UPDATED: Generate profile URL - prefer custom upload, fallback to external URL
   def generate_profile_url(user)
-    return nil unless user.profile_picture.attached?
-    
+    return signed_r2_profile_url(user) if user.profile_picture.attached?
+    user.external_profile_picture_url
+  end
+
+  def signed_r2_profile_url(user)
     s3_client = Aws::S3::Client.new(
       access_key_id: ENV['R2_ACCESS_KEY_ID'],
       secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
