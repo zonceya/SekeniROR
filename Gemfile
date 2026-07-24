@@ -55,7 +55,8 @@ gem 'firebase-admin-sdk'
 gem 'aws-sdk-s3', '~> 1.0'
 gem 'down', '~> 5.0'
 gem 'mini_magick'
-
+gem 'csv'
+gem 'roo', '~> 2.10.0'
 # Email handling (required for SMTP)
 gem 'net-smtp', require: false
 gem 'net-pop', require: false

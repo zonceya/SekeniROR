@@ -1,7 +1,7 @@
 # app/models/school.rb
 class School < ApplicationRecord
   belongs_to :province
-  
+   belongs_to :location 
   # ADD THIS association
   has_many :user_schools
   has_many :users, through: :user_schools
@@ -21,4 +21,11 @@ class School < ApplicationRecord
     user_location = Location.find(user.location_id)
     where(province_id: user_location.town.province_id)
   }
+   def full_address
+    return "Unknown location" unless location&.town
+    "#{location.town.name}, #{location.province}, #{location.country}"
+  end
+    def town
+    location&.town
+    end
 end

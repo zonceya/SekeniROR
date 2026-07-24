@@ -19,7 +19,8 @@ module Api
         end
         
         Rails.logger.info "📍 Cache MISS - loading provinces from database"
-        provinces = Province.select(:id, :name).order(:name)
+        # ✅ SELECT ALL attributes that the serializer expects
+        provinces = Province.select(:id, :name, :code, :active).order(:name)
         
         begin
           Rails.cache.write(cache_key, provinces, expires_in: 1.day)
