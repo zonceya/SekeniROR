@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_23_011118) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -168,6 +168,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.index ["dispute_reference"], name: "index_disputes_on_dispute_reference", unique: true
     t.index ["order_id"], name: "index_disputes_on_order_id"
     t.index ["raised_by_id"], name: "index_disputes_on_raised_by_id"
+    t.index ["status", "created_at"], name: "index_disputes_on_status_created"
   end
 
   create_table "favorites", id: :serial, force: :cascade do |t|
@@ -271,8 +272,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.datetime "updated_at", null: false
     t.index ["color_id"], name: "index_item_variants_on_color_id"
     t.index ["condition_id"], name: "index_item_variants_on_condition_id"
+    t.index ["item_id", "is_active"], name: "index_item_variants_on_item_and_active"
     t.index ["item_id", "size_id", "color_id", "condition_id"], name: "idx_item_variant_unique", unique: true
     t.index ["item_id"], name: "index_item_variants_on_item_id"
+    t.index ["price", "item_id"], name: "index_item_variants_on_price_item"
     t.index ["size_id"], name: "index_item_variants_on_size_id"
     t.index ["sku"], name: "index_item_variants_on_sku", unique: true
   end
@@ -308,13 +311,18 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.integer "item_condition_id"
     t.integer "view_count", default: 0, null: false
     t.index ["id"], name: "idx_items_category"
+    t.index ["main_category_id", "sub_category_id"], name: "index_items_on_category_subcategory"
     t.index ["main_category_id"], name: "index_items_on_main_category_id"
+    t.index ["price", "status", "deleted"], name: "index_items_on_price_status_deleted"
     t.index ["price"], name: "index_items_on_price"
     t.index ["school_id", "created_at"], name: "index_items_on_school_id_and_created_at"
+    t.index ["school_id", "main_category_id"], name: "index_items_on_school_and_category"
     t.index ["school_id", "price"], name: "index_items_on_school_id_and_price"
     t.index ["school_id", "status", "deleted", "created_at", "price"], name: "index_items_on_school_status_deleted_created_price"
     t.index ["school_id", "status", "deleted", "price"], name: "index_items_on_school_status_deleted_price"
+    t.index ["school_id", "status", "deleted"], name: "index_items_on_school_status_deleted"
     t.index ["school_id"], name: "index_items_on_school_id"
+    t.index ["status", "deleted", "created_at"], name: "index_items_on_status_deleted_created"
     t.index ["sub_category_id"], name: "index_items_on_sub_category_id"
     t.index ["view_count"], name: "index_items_on_view_count"
   end
@@ -362,6 +370,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["notifiable_type", "notifiable_id"], name: "index_notifications_on_notifiable"
+    t.index ["user_id", "read", "created_at"], name: "index_notifications_user_read_created"
     t.index ["user_id"], name: "index_notifications_on_user_id"
   end
 
@@ -380,6 +389,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.integer "quantity", default: 1, null: false
     t.index ["item_id"], name: "index_order_items_on_item_id"
+    t.index ["order_id", "item_id"], name: "index_order_items_on_order_item"
     t.index ["order_id"], name: "index_order_items_on_order_id"
   end
 
@@ -422,8 +432,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.text "proof_notes"
     t.datetime "paid_at"
     t.string "bank"
+    t.index ["buyer_id", "order_status"], name: "index_orders_on_buyer_status"
     t.index ["buyer_id"], name: "index_orders_on_buyer_id"
     t.index ["order_number"], name: "index_orders_on_order_number", unique: true
+    t.index ["shop_id", "order_status"], name: "index_orders_on_shop_status"
     t.unique_constraint ["order_number"], name: "orders_order_number_key"
   end
 
@@ -467,7 +479,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
 
   create_table "provinces", id: :serial, force: :cascade do |t|
     t.string "name", limit: 64, null: false
-
+    t.string "code"
+    t.boolean "active", default: true
+    t.index ["code"], name: "index_provinces_on_code", unique: true
     t.unique_constraint ["name"], name: "provinces_name_key"
   end
 
@@ -508,6 +522,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.datetime "updated_at", null: false
     t.index ["dispute_id"], name: "index_refunds_on_dispute_id"
     t.index ["order_id"], name: "index_refunds_on_order_id"
+    t.index ["status", "created_at"], name: "index_refunds_on_status_created"
   end
 
   create_table "return_requests", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -517,6 +532,39 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
   end
 
+  create_table "school_staging_imports", force: :cascade do |t|
+    t.string "nat_emis"
+    t.string "official_institution_name"
+    t.string "province"
+    t.string "town_city"
+    t.string "township_village"
+    t.string "suburb"
+    t.text "street_address"
+    t.text "postal_address"
+    t.string "email"
+    t.string "telephone"
+    t.string "gis_lat"
+    t.string "gis_long"
+    t.string "school_type"
+    t.string "learners_count"
+    t.string "educators_count"
+    t.string "quintile"
+    t.string "no_fee_school"
+    t.string "urban_rural"
+    t.string "status"
+    t.string "processed_status", default: "pending"
+    t.text "error_message"
+    t.integer "resolved_town_id"
+    t.integer "resolved_province_id"
+    t.integer "resolved_school_id"
+    t.string "resolved_locality_raw"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["nat_emis"], name: "index_school_staging_imports_on_nat_emis"
+    t.index ["processed_status"], name: "index_school_staging_imports_on_processed_status"
+    t.index ["province"], name: "index_school_staging_imports_on_province"
+  end
+
   create_table "schools", id: :serial, force: :cascade do |t|
     t.string "name", limit: 255, null: false
     t.integer "location_id"
@@ -524,6 +572,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_07_002812) do
     t.datetime "created_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.integer "province_id"
+    t.string "emis"
+    t.index ["emis"], name: "index_schools_on_emis", unique: true
   end
 
   create_table "seller_archive", primary_key: ["user_id", "shop_id"], force: :cascade do |t|
