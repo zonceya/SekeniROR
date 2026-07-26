@@ -1,0 +1,253 @@
+<%# app/views/help_mailer/support_request.html.erb %>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Support Request</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+    
+    body {
+      font-family: 'Patrick Hand', 'Comic Sans MS', cursive, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #ffffff; /* White background */
+    }
+    .email-container {
+      background: #ffffff; /* White */
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      overflow: hidden;
+      border: 2px solid #000000;
+      position: relative;
+    }
+    .header {
+      background: #000000; /* Black header */
+      padding: 30px 20px;
+      text-align: center;
+      border-bottom: 4px solid #000000;
+      position: relative;
+      z-index: 1;
+    }
+    .header .logo {
+      font-size: 32px;
+      font-weight: bold;
+      color: #ffffff; /* White text on black */
+      letter-spacing: 4px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .header .logo span {
+      color: #ffffff;
+    }
+    .header .logo-sketch {
+      font-size: 14px;
+      color: #cccccc;
+      letter-spacing: 6px;
+      margin-top: 4px;
+      font-style: italic;
+    }
+    .header .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      color: #ffffff;
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-top: 8px;
+      border: 1px solid rgba(255,255,255,0.3);
+      font-family: 'Patrick Hand', cursive;
+    }
+    .content {
+      padding: 30px 25px;
+      background: #ffffff;
+      position: relative;
+      z-index: 1;
+    }
+    .intro-text {
+      color: #000000;
+      margin-bottom: 20px;
+      font-size: 16px;
+      font-family: 'Patrick Hand', cursive;
+      letter-spacing: 0.5px;
+    }
+    .intro-text .emoji {
+      font-size: 20px;
+    }
+    .info-box {
+      background: #f5f5f5;
+      border-left: 4px solid #000000;
+      padding: 15px 20px;
+      border-radius: 4px;
+      margin: 15px 0;
+      border: 1px solid #e0e0e0;
+    }
+    .info-box p {
+      margin: 5px 0;
+      font-size: 15px;
+      color: #000000;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .info-box .label {
+      font-weight: 600;
+      color: #000000;
+    }
+    .info-box .value {
+      color: #333333;
+    }
+    .divider {
+      border-top: 2px dashed #cccccc;
+      margin: 25px 0;
+    }
+    .subject-box {
+      background: #f9f9f9;
+      padding: 15px 18px;
+      border-radius: 8px;
+      margin: 10px 0 20px 0;
+      border: 1px solid #e0e0e0;
+    }
+    .subject-box .label {
+      font-size: 12px;
+      color: #666666;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .subject-box .subject-text {
+      font-size: 20px;
+      font-weight: bold;
+      color: #000000;
+      margin-top: 4px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .message-box {
+      background: #f9f9f9;
+      padding: 18px 20px;
+      border-radius: 8px;
+      margin: 10px 0;
+      border: 1px solid #e0e0e0;
+    }
+    .message-box .label {
+      font-size: 12px;
+      color: #666666;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .message-box .message-text {
+      margin: 8px 0 0 0;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-size: 16px;
+      line-height: 1.8;
+      color: #000000;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .footer {
+      background: #f5f5f5;
+      padding: 20px 25px;
+      border-top: 2px solid #e0e0e0;
+      font-size: 13px;
+      color: #666666;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+    .footer .reply-hint {
+      background: #e8f0fe;
+      padding: 12px;
+      border-radius: 6px;
+      color: #000000;
+      margin-top: 10px;
+      border: 1px solid #d0d0d0;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .footer .reply-hint strong {
+      color: #000000;
+    }
+    .footer .copyright {
+      margin: 15px 0 0 0;
+      font-size: 11px;
+      color: #999999;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .chalk-doodle {
+      text-align: center;
+      color: #cccccc;
+      font-size: 28px;
+      margin: 10px 0;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .response-badge {
+      display: inline-block;
+      background: #f5f5f5;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 13px;
+      color: #000000;
+      border: 1px solid #e0e0e0;
+      font-family: 'Patrick Hand', cursive;
+    }
+    @media only screen and (max-width: 480px) {
+      .content { padding: 20px 15px; }
+      .header { padding: 20px 15px; }
+      .header .logo { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <div class="logo">✏️ S<span>k</span>ool<span>S</span>wap</div>
+      <div class="logo-sketch">~ where learning meets community ~</div>
+      <div class="badge">📋 SUPPORT TICKET #<%= Time.now.strftime("%Y%m%d%H%M") %></div>
+    </div>
+    
+    <div class="content">
+      <p class="intro-text">
+        <span class="emoji">📝</span> A new support request has been submitted through SkoolSwap.
+      </p>
+      
+      <div class="info-box">
+        <p><span class="label">👤 From:</span> <span class="value"><%= @user.name %></span></p>
+        <p><span class="label">📧 Email:</span> <span class="value"><%= @user.email %></span></p>
+        <p><span class="label">📱 Mobile:</span> <span class="value"><%= @user.mobile || "Not provided" %></span></p>
+        <p><span class="label">📅 Submitted:</span> <span class="value"><%= Time.now.strftime("%B %d, %Y at %I:%M %p") %></span></p>
+      </div>
+      
+      <div class="divider">✧ ✧ ✧</div>
+      
+      <div class="subject-box">
+        <div class="label">📝 Subject</div>
+        <div class="subject-text"><%= @subject %></div>
+      </div>
+      
+      <div class="message-box">
+        <div class="label">💬 Message</div>
+        <div class="message-text"><%= @description %></div>
+      </div>
+      
+      <div class="chalk-doodle">~ ✦ ~ ✦ ~ ✦ ~</div>
+      
+      <div style="text-align: center; padding: 10px 0;">
+        <span class="response-badge">
+          ⏱️ Response within 24 hours
+        </span>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p style="margin: 0; color: #666666;">💡 <strong style="color: #000000;">Tip:</strong> Reply directly to this email to respond to the user.</p>
+      <div class="reply-hint">
+        📌 When you reply, it will go directly to <strong><%= @user.email %></strong>
+      </div>
+      <p class="copyright">
+        ✏️ SkoolSwap © <%= Time.now.year %> &bull; Where Learning Meets Community
+      </p>
+    </div>
+  </div>
+</body>
+</html>
