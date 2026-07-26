@@ -1,0 +1,284 @@
+<%# app/views/help_mailer/auto_reply.html.erb %>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Support Request Received</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+    
+    body {
+      font-family: 'Patrick Hand', 'Comic Sans MS', cursive, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #ffffff; /* White background */
+    }
+    .email-container {
+      background: #ffffff; /* White */
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      overflow: hidden;
+      border: 2px solid #000000;
+      position: relative;
+    }
+    .header {
+      background: #000000; /* Black header */
+      padding: 30px 20px;
+      text-align: center;
+      border-bottom: 4px solid #000000;
+      position: relative;
+      z-index: 1;
+    }
+    .header .logo {
+      font-size: 28px;
+      font-weight: bold;
+      color: #ffffff; /* White text on black */
+      letter-spacing: 4px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .header .logo span {
+      color: #ffffff;
+    }
+    .header .subtitle {
+      color: #cccccc;
+      font-size: 14px;
+      margin-top: 4px;
+      font-family: 'Patrick Hand', cursive;
+      letter-spacing: 2px;
+    }
+    .header .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      color: #ffffff;
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-top: 8px;
+      border: 1px solid rgba(255,255,255,0.3);
+      font-family: 'Patrick Hand', cursive;
+    }
+    .content {
+      padding: 30px 25px;
+      background: #ffffff;
+      position: relative;
+      z-index: 1;
+    }
+    .greeting {
+      font-size: 20px;
+      color: #000000;
+      margin-bottom: 15px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .greeting strong {
+      color: #000000;
+    }
+    .text-body {
+      color: #333333;
+      font-size: 16px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .highlight-box {
+      background: #f9f9f9;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 15px 0;
+      border-left: 4px solid #000000;
+      border: 1px solid #e0e0e0;
+    }
+    .highlight-box .subject-text {
+      font-weight: 600;
+      color: #000000;
+      font-size: 18px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .response-box {
+      background: #f5f5f5;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 15px 0;
+      text-align: center;
+      border: 1px solid #e0e0e0;
+    }
+    .response-box .time {
+      font-size: 28px;
+      font-weight: 700;
+      color: #000000;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .response-box .label {
+      color: #666666;
+      font-size: 14px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .hours-box {
+      background: #f9f9f9;
+      padding: 18px 20px;
+      border-radius: 8px;
+      margin: 15px 0;
+      border: 1px solid #e0e0e0;
+    }
+    .hours-box .hours-title {
+      color: #000000;
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .hours-box .hours-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #f0f0f0;
+      color: #333333;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .hours-box .hours-row:last-child {
+      border-bottom: none;
+    }
+    .hours-box .day {
+      color: #000000;
+      font-weight: 600;
+    }
+    .hours-box .time {
+      color: #666666;
+    }
+    .hours-box .note {
+      font-size: 13px;
+      color: #666666;
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      font-family: 'Patrick Hand', cursive;
+      border: 1px solid #e8e8e8;
+    }
+    .phone-box {
+      text-align: center;
+      padding: 15px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin: 15px 0;
+      border: 1px solid #e0e0e0;
+    }
+    .phone-box .phone-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: #000000;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .phone-box .phone-label {
+      font-size: 13px;
+      color: #666666;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .chalk-doodle {
+      text-align: center;
+      color: #cccccc;
+      font-size: 24px;
+      margin: 15px 0;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .footer {
+      background: #f5f5f5;
+      padding: 20px 25px;
+      border-top: 2px solid #e0e0e0;
+      font-size: 13px;
+      color: #666666;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      font-family: 'Patrick Hand', cursive;
+    }
+    .footer .auto-note {
+      font-size: 12px;
+      color: #999999;
+      margin-top: 5px;
+    }
+    .footer .copyright {
+      margin: 15px 0 0 0;
+      font-size: 11px;
+      color: #999999;
+    }
+    .request-id {
+      display: inline-block;
+      background: #f5f5f5;
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 11px;
+      color: #666666;
+      border: 1px solid #e0e0e0;
+      font-family: 'Patrick Hand', cursive;
+    }
+    @media only screen and (max-width: 480px) {
+      .content { padding: 20px 15px; }
+      .header { padding: 20px 15px; }
+      .header .logo { font-size: 22px; }
+      .hours-box .hours-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <div class="logo">✏️ S<span>k</span>ool<span>S</span>wap</div>
+      <div class="subtitle">~ where learning meets community ~</div>
+      <div class="badge">✅ Request Received</div>
+    </div>
+    
+    <div class="content">
+      <p class="greeting">Dear <strong><%= @user.name %></strong>,</p>
+      
+      <p class="text-body">Thank you for contacting SkoolSwap support. We have received your request regarding:</p>
+      
+      <div class="highlight-box">
+        <p style="margin: 0;">"<span class="subject-text"><%= @subject %></span>"</p>
+      </div>
+      
+      <div class="response-box">
+        <div class="label">⏱️ Our team will review and respond within</div>
+        <div class="time">24 hours</div>
+      </div>
+      
+      <div class="hours-box">
+        <div class="hours-title">📞 Support Hours</div>
+        <div class="hours-row">
+          <span class="day">Monday - Friday</span>
+          <span class="time">8:00 AM - 5:00 PM</span>
+        </div>
+        <div class="hours-row">
+          <span class="day">Public Holidays</span>
+          <span class="time">10:00 AM - 1:00 PM</span>
+        </div>
+        <div class="note">
+          ℹ️ Open on public holidays, except Christmas Day and New Year's Day
+        </div>
+      </div>
+      
+      <div class="phone-box">
+        <div class="phone-label">📱 Need immediate assistance?</div>
+        <div class="phone-number">075 051 0169</div>
+      </div>
+      
+      <div class="chalk-doodle">✧ ✧ ✧</div>
+      
+      <div style="text-align: center; padding: 5px 0;">
+        <span class="request-id">
+          🆔 Request #<%= Time.now.strftime("%Y%m%d%H%M") %>
+        </span>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p style="margin: 0; color: #666666;">This is an automated reply from SkoolSwap.</p>
+      <p class="auto-note">Please do not reply to this email. Contact us through the app for further assistance.</p>
+      <p class="copyright">
+        ✏️ SkoolSwap © <%= Time.now.year %> &bull; Where Learning Meets Community
+      </p>
+    </div>
+  </div>
+</body>
+</html>

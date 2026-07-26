@@ -154,7 +154,11 @@ Rails.application.routes.draw do
           get :current
         end
       end
-
+      # ================================
+      # 🆘 HELP / SUPPORT ROUTES
+      # ================================
+      post 'help/send', to: 'help#send_support_request'
+      get  'help/status', to: 'help#status'
       # ================================
       # 💬 CHAT ROUTES
       # ================================

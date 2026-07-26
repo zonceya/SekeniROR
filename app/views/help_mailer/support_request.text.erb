@@ -1,0 +1,26 @@
+<%# app/views/help_mailer/support_request.text.erb %>
+🔔 NEW SUPPORT REQUEST
+=============================================
+Ticket #: <%= Time.now.strftime("%Y%m%d%H%M") %>
+Submitted: <%= Time.now.strftime("%B %d, %Y at %I:%M %p") %>
+
+---------------------------------------------
+
+👤 From: <%= @user.name %>
+📧 Email: <%= @user.email %>
+📱 Mobile: <%= @user.mobile || "Not provided" %>
+
+---------------------------------------------
+📝 SUBJECT
+<%= @subject %>
+
+---------------------------------------------
+💬 MESSAGE
+<%= @description %>
+
+=============================================
+💡 TIP: Reply directly to this email to respond to the user.
+When you reply, it will go directly to <%= @user.email %>
+
+This is an automated notification from SkoolSwap.
+© <%= Time.now.year %> SkoolSwap. All rights reserved.

@@ -1,13 +1,11 @@
 # app/mailers/help_mailer.rb
 class HelpMailer < ApplicationMailer
   default from: "SkoolSwap Support <admin@skoolswap.co.za>"
-  layout 'mailer'
 
-  # Email sent to admin when user submits a support request
-  def support_request(user, subject, message)
+  def support_request(user, subject, description)
     @user = user
     @subject = subject
-    @message = message
+    @description = description
     
     mail(
       to: 'admin@skoolswap.co.za',
@@ -16,14 +14,13 @@ class HelpMailer < ApplicationMailer
     )
   end
 
-  # Auto-reply sent to user confirming receipt
   def auto_reply(user, subject)
     @user = user
     @subject = subject
     
     mail(
       to: user.email,
-      subject: "We've received your support request: #{subject}"
+      subject: "We've received your support request"
     )
   end
 end
