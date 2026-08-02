@@ -1291,19 +1291,23 @@ module Api
         format_items(items, "Items at your school")
       end
       
-      def school_essentials_with_fallback(school_id, nearby_ids)
-        uniform_cat = MainCategory.where(name: ['Uniform', 'School Wear', 'Uniforms']).pluck(:id)
-        sport_cat = MainCategory.where(name: ['Sport', 'Sports', 'Sports Gear']).pluck(:id)
-        accessory_cat = MainCategory.where(name: ['Accessories']).pluck(:id)
-        stationery_cat = MainCategory.where(name: ['Stationery']).pluck(:id)
-        
-        {
-          uniforms: get_category_items(school_id, nearby_ids, uniform_cat, "Uniforms"),
-          sports: get_category_items(school_id, nearby_ids, sport_cat, "Sports Gear"),
-          accessories: get_category_items(school_id, nearby_ids, accessory_cat, "Accessories"),
-          stationery: get_category_items(school_id, nearby_ids, stationery_cat, "Stationery")
-        }
-      end
+     # app/controllers/api/v1/recommendations_controller.rb
+
+# app/controllers/api/v1/recommendations_controller.rb
+
+def school_essentials_with_fallback(school_id, nearby_ids)
+  uniform_cat = MainCategory.where(name: ['Uniform', 'School Wear', 'Uniforms']).pluck(:id)
+  sport_cat = MainCategory.where(name: ['Sport', 'Sports', 'Sports Gear']).pluck(:id)
+  accessory_cat = MainCategory.where(name: ['Accessories']).pluck(:id)
+  stationery_cat = MainCategory.where(name: ['Stationery']).pluck(:id)
+  
+  {
+    uniforms: get_category_items(school_id, nearby_ids, uniform_cat, "Uniforms"),
+    sports: get_category_items(school_id, nearby_ids, sport_cat, "Sports Gear"),
+    accessories: get_category_items(school_id, nearby_ids, accessory_cat, "Accessories"),
+    stationery: get_category_items(school_id, nearby_ids, stationery_cat, "Stationery")  # ✅ ADD THIS
+  }
+end
       
       def get_category_items(school_id, nearby_ids, category_ids, category_name)
         school_items = with_all_associations(Item).where(school_id: school_id, main_category_id: category_ids)
