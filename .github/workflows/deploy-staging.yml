@@ -1,0 +1,67 @@
+name: Deploy to Staging Server
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to Staging Rails Server
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.STAGING_PORT || 22 }}
+          script: |
+            # Set the app directory - CHANGE THIS TO YOUR RAILS APP PATH
+            APP_DIR="/var/www/sekeni_ror_staging"
+            
+            echo "🚀 Deploying ${{ github.ref_name }} branch to staging..."
+            
+            cd $APP_DIR
+            
+            # Pull latest code
+            git fetch origin
+            git reset --hard origin/${{ github.ref_name }}
+            
+            # Install gems
+            echo "📦 Installing gems..."
+            bundle install --without development test
+            
+            # Run migrations
+            echo "🗄️ Running database migrations..."
+            RAILS_ENV=staging bundle exec rails db:migrate
+            
+            # Precompile assets
+            echo "🎨 Precompiling assets..."
+            RAILS_ENV=staging bundle exec rails assets:precompile
+            
+            # Restart the app (using your server's method)
+            echo "🔄 Restarting Rails app..."
+            
+            # Try different restart methods - use the one that works for you
+            
+            # Method 1: Passenger (most common)
+            touch tmp/restart.txt
+            
+            # Method 2: Systemd (if using systemd)
+            # sudo systemctl restart sekeni_ror_staging
+            
+            # Method 3: Puma
+            # bundle exec pumactl -P tmp/pids/server.pid restart
+            
+            # Method 4: Just restart the Rails server
+            # sudo service rails restart
+            
+            echo "✅ Staging deployment complete!"
+            
+            # Optional: Health check
+            # curl -f http://localhost:3000/health || exit 1
