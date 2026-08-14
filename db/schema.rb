@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_23_011118) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_10_224713) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -310,7 +310,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_23_011118) do
     t.integer "available_variants_count", default: 0
     t.integer "item_condition_id"
     t.integer "view_count", default: 0, null: false
+    t.string "source_type"
+    t.boolean "is_demo", default: false
+    t.boolean "is_placeholder", default: false
+    t.boolean "is_system", default: false, null: false
+    t.integer "display_order", default: 0
     t.index ["id"], name: "idx_items_category"
+    t.index ["is_demo"], name: "index_items_on_is_demo"
+    t.index ["is_system", "display_order"], name: "index_items_on_system_and_order"
     t.index ["main_category_id", "sub_category_id"], name: "index_items_on_category_subcategory"
     t.index ["main_category_id"], name: "index_items_on_main_category_id"
     t.index ["price", "status", "deleted"], name: "index_items_on_price_status_deleted"
@@ -322,6 +329,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_23_011118) do
     t.index ["school_id", "status", "deleted", "price"], name: "index_items_on_school_status_deleted_price"
     t.index ["school_id", "status", "deleted"], name: "index_items_on_school_status_deleted"
     t.index ["school_id"], name: "index_items_on_school_id"
+    t.index ["source_type"], name: "index_items_on_source_type"
     t.index ["status", "deleted", "created_at"], name: "index_items_on_status_deleted_created"
     t.index ["sub_category_id"], name: "index_items_on_sub_category_id"
     t.index ["view_count"], name: "index_items_on_view_count"
@@ -573,6 +581,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_23_011118) do
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.integer "province_id"
     t.string "emis"
+    t.boolean "is_system", default: false, null: false
+    t.string "logo_url"
     t.index ["emis"], name: "index_schools_on_emis", unique: true
   end
 

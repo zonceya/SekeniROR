@@ -636,7 +636,11 @@ end
             main_category: item.main_category&.as_json,
             sub_category: item.sub_category&.as_json,
             gender: item.gender&.as_json,
-            school: item.school&.as_json,
+            school: {
+                id: item.school&.id,
+                name: item.school&.name,
+                logo_url: item.school&.logo_url  # ← ADD THIS
+              },
             size: primary_variant&.size&.as_json,
             color: primary_variant&.color&.as_json,
             condition: primary_variant&.condition&.as_json || item.item_condition&.as_json,
