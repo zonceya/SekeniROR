@@ -45,6 +45,7 @@ module Api
             name: school.name,
             province_id: school.province_id,
             province: province,
+             logo_url: school.logo_url ,
             location_id: school.location_id,  # Changed from town_id
             school_type: school.school_type
           }
@@ -68,6 +69,7 @@ module Api
             name: school.name,
             province_id: school.province_id,
             province: province,
+            logo_url: school.logo_url ,
             location_id: school.location_id,  # Changed from town_id
             school_type: school.school_type
           }
