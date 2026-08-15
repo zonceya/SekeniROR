@@ -1,110 +1,88 @@
 require "active_support/core_ext/integer/time"
-require 'openssl'
-OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
 
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
-  # Make code changes take effect immediately without server restart.
+  # Reload application code when files change.
   config.enable_reloading = true
 
   # Do not eager load code on boot.
   config.eager_load = false
 
-  # Show full error reports.
+  # Show full error reports while testing staging.
   config.consider_all_requests_local = true
 
-  # Enable server timing.
   config.server_timing = true
 
-  # Enable/disable Action Controller caching. By default Action Controller caching is disabled.
-  # Run rails dev:cache to toggle Action Controller caching.
+  # Controller caching
   if Rails.root.join("tmp/caching-dev.txt").exist?
     config.action_controller.perform_caching = true
     config.action_controller.enable_fragment_cache_logging = true
-    config.public_file_server.headers = { "cache-control" => "public, max-age=#{2.days.to_i}" }
+    config.public_file_server.headers = {
+      "cache-control" => "public, max-age=#{2.days.to_i}"
+    }
   else
     config.action_controller.perform_caching = false
   end
 
-  # Change to :null_store to avoid any caching.
   config.cache_store = :memory_store
 
-  # Store uploaded files on the local file system (see config/storage.yml for options).
-  config.active_storage.service = :local
+  # Cloudflare R2
+  config.active_storage.service = :r2
 
-  # Don't care if the mailer can't send.
-  config.action_mailer.raise_delivery_errors = false
+  # Host authorization
+config.hosts << "127.0.0.1"
+config.hosts << "localhost"
+config.hosts << "192.168.0.11"
+config.hosts << "api.skoolswap.co.za"
+  config.force_ssl = false
 
-  # Make template changes take effect immediately.
-  config.action_mailer.perform_caching = false
-
-  # Set localhost to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = { host: "localhost", port: 3001 }
-
-  # Print deprecation notices to the Rails logger.
-  config.active_support.deprecation = :log
-  config.hosts << "api.skoolswap.co.za"
-  config.hosts << "localhost"
-  config.hosts << "192.168.0.159"
-  config.hosts << /192\.168\.0\.159(:\d+)?/
-  # config.hosts << /[a-z0-9\-]+\.ngrok\-free\.app/
-  config.force_ssl = false 
-  # to start cloudfare -- cloudflared tunnel run sekeni-tunnel
-
+  # Background jobs
   config.active_job.queue_adapter = :async
 
-  # Raise an error on page load if there are pending migrations.
+  # Active Record
   config.active_record.migration_error = :page_load
-
-  # Highlight code that triggered database queries in logs.
   config.active_record.verbose_query_logs = true
-
-  # Append comments with runtime information tags to SQL queries in logs.
   config.active_record.query_log_tags_enabled = true
 
-  # Highlight code that enqueued background job in logs.
+  # Active Job logging
   config.active_job.verbose_enqueue_logs = true
 
-  # Raises error for missing translations.
-  # config.i18n.raise_on_missing_translations = true
-
-  # Annotate rendered view with file names.
+  # Action View
   config.action_view.annotate_rendered_view_with_filenames = true
-  config.active_storage.service = :r2
-  
-  # Uncomment if you wish to allow Action Cable access from any origin.
-  # config.action_cable.disable_request_forgery_protection = true
-  
-  # Add this line to fix URL generation
-  config.action_controller.default_url_options = { host: 'localhost', port: 3001 }
-  # config.routes.default_url_options = { host: 'localhost', port: 3000 }
-  
+
+  # Action Controller
   config.action_controller.raise_on_missing_callback_actions = false
-  # Raise error when a before_action's only/except options reference missing actions.
-  # config.action_controller.raise_on_missing_callback_actions = true
-  
+
+  # API URL generation
+  config.action_controller.default_url_options = {
+    host: "api.skoolswap.co.za"
+  }
+
+  # Mailer
+  config.action_mailer.raise_delivery_errors = true
+  config.action_mailer.perform_caching = false
   config.action_mailer.delivery_method = :smtp
+
   config.action_mailer.smtp_settings = {
-    address: ENV['SMTP_ADDRESS'],
-    port: ENV['SMTP_PORT'],
-    domain: ENV['SMTP_DOMAIN'],
-    user_name: ENV['SMTP_USERNAME'],
-    password: ENV['SMTP_PASSWORD'],
-    authentication: 'plain',
+    address: ENV["SMTP_ADDRESS"],
+    port: ENV["SMTP_PORT"],
+    domain: ENV["SMTP_DOMAIN"],
+    user_name: ENV["SMTP_USERNAME"],
+    password: ENV["SMTP_PASSWORD"],
+    authentication: "plain",
     enable_starttls_auto: true,
     open_timeout: 30,
     read_timeout: 30
   }
-  
-  # This is critical - sets the From address
+
   config.action_mailer.default_options = {
     from: "#{ENV['DEFAULT_FROM_NAME']} <#{ENV['DEFAULT_FROM_EMAIL']}>"
   }
-  
-  config.action_mailer.raise_delivery_errors = true
-  config.action_mailer.default_url_options = { host: 'localhost', port: 3001 }
-  
-  # Apply autocorrection by RuboCop to files generated by `bin/rails generate`.
-  # config.generators.apply_rubocop_autocorrect_after_generate!
+
+  config.action_mailer.default_url_options = {
+    host: "api.skoolswap.co.za"
+  }
+
+  config.active_support.deprecation = :log
 end

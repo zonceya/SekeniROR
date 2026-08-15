@@ -581,8 +581,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_10_224713) do
     t.datetime "updated_at", precision: nil, default: -> { "CURRENT_TIMESTAMP" }
     t.integer "province_id"
     t.string "emis"
-    t.boolean "is_system", default: false, null: false
     t.string "logo_url"
+    t.boolean "is_system", default: false, null: false
     t.index ["emis"], name: "index_schools_on_emis", unique: true
   end
 
