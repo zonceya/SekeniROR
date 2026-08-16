@@ -1,4 +1,4 @@
-```yaml
+yaml
 name: Deploy to Staging Server
 
 on:
@@ -41,4 +41,4 @@ jobs:
             sudo systemctl restart skoolswap-staging
 
             echo "✅ Deployment complete"
-```
+
