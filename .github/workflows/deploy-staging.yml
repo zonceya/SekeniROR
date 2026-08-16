@@ -1,7 +1,7 @@
 yaml
 name: Deploy to Staging Server
 
-on:
+'on':
   push:
     branches:
       - dev
@@ -24,21 +24,18 @@ jobs:
           script: |
             APP_DIR="/home/zama/sekeniror"
 
-            echo "🚀 Deploying dev to staging..."
+            echo "Deploying dev to staging"
 
-            cd $APP_DIR
+            cd "$APP_DIR"
 
             git fetch origin
             git reset --hard origin/dev
 
-            echo "📦 Installing gems..."
             bundle install
 
-            echo "🗄️ Running migrations..."
             RAILS_ENV=staging bundle exec rails db:migrate
 
-            echo "🔄 Restarting application..."
             sudo systemctl restart skoolswap-staging
 
-            echo "✅ Deployment complete"
+            echo "Deployment complete"
 
