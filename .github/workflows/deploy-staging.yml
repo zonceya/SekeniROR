@@ -9,6 +9,9 @@ jobs:
   deploy:
     runs-on: self-hosted
 
+    env:
+      SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
+
     steps:
       - name: Deploy Staging
         run: |
