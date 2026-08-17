@@ -1,40 +1,26 @@
-name: Deploy to Staging Server
+name: Deploy to Staging
 
-'on':
+on:
   push:
     branches:
       - dev
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Deploy Staging
+        run: |
+          cd /home/zama/sekeniror
 
-      - name: Deploy to Staging Rails Server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.STAGING_PORT }}
-          script: |
-            APP_DIR="/home/zama/sekeniror"
+          git fetch origin
+          git reset --hard origin/dev
 
-            echo "Deploying dev to staging"
+          bundle install
 
-            cd "$APP_DIR"
+          RAILS_ENV=staging bundle exec rails db:migrate
 
-            git fetch origin
-            git reset --hard origin/dev
+          sudo systemctl restart skoolswap-staging
 
-            bundle install
-
-            RAILS_ENV=staging bundle exec rails db:migrate
-
-            sudo systemctl restart skoolswap-staging
-
-            echo "Deployment complete"
-
+          echo "Deployment complete"
