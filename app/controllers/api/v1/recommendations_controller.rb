@@ -530,86 +530,91 @@ module Api
       end
       
       # GET /api/v1/recommendations/essentials/all
-      def essentials_all
-        school_id = params[:school_id] || @user_school_id
-        category = params[:category]&.downcase
-        sub_category_id = params[:sub_category_id] || params[:type_id]
-        page = params[:page] || 1
-        per_page = params[:per_page] || 30
+    # In recommendations_controller.rb
 
-        min_price = params[:min_price].present? ? params[:min_price].to_f : nil
-        max_price = params[:max_price].present? ? params[:max_price].to_f : nil
+def essentials_all
+  school_id = params[:school_id] || @user_school_id
+  category = params[:category]&.downcase
+  sub_category_id = params[:sub_category_id] || params[:type_id]
+  page = params[:page] || 1
+  per_page = params[:per_page] || 30
 
-        return render json: { success: false, error: "School ID required" }, status: :bad_request unless school_id
+  min_price = params[:min_price].present? ? params[:min_price].to_f : nil
+  max_price = params[:max_price].present? ? params[:max_price].to_f : nil
 
-        nearby_ids = find_nearby_schools(school_id)
+  return render json: { success: false, error: "School ID required" }, status: :bad_request unless school_id
 
-        # If sub_category_id is provided
-        if sub_category_id.present?
-          tagged_items = get_items_with_fallback(
-            school_id: school_id,
-            nearby_ids: nearby_ids,
-            limit: per_page.to_i * 2,
-            sub_category_id: sub_category_id,
-            min_price: min_price,
-            max_price: max_price,
-            excluded_ids: get_excluded_ids
-          )
-          
-          sub = SubCategory.find_by(id: sub_category_id)
-          sub_name = sub&.name || "Items"
-          
-          return render_paginated_items(tagged_items, "#{sub_name} Essentials", page, per_page)
-        end
+  nearby_ids = find_nearby_schools(school_id)
 
-        # If category is provided
-        category_map = {
-          'uniforms' => MainCategory.where(name: ['Uniform', 'School Wear', 'Uniforms']).pluck(:id),
-          'sports' => MainCategory.where(name: ['Sport', 'Sports', 'Sports Gear']).pluck(:id),
-          'accessories' => MainCategory.where(name: ['Accessories']).pluck(:id),
-          'stationery' => MainCategory.where(name: ['Stationery']).pluck(:id)
-        }
+  # ✅ FIX: Only filter by sub_category_id if it's present and valid
+  if sub_category_id.present? && sub_category_id.to_i > 0
+    # Check if sub_category exists
+    sub = SubCategory.find_by(id: sub_category_id)
+    if sub
+      tagged_items = get_items_with_fallback(
+        school_id: school_id,
+        nearby_ids: nearby_ids,
+        limit: per_page.to_i * 2,
+        sub_category_id: sub_category_id,
+        min_price: min_price,
+        max_price: max_price,
+        excluded_ids: get_excluded_ids
+      )
+      
+      sub_name = sub.name || "Items"
+      return render_paginated_items(tagged_items, "#{sub_name} Essentials", page, per_page)
+    end
+  end
 
-        if category.present? && category_map[category].present?
-          tagged_items = get_items_with_fallback(
-            school_id: school_id,
-            nearby_ids: nearby_ids,
-            limit: per_page.to_i * 2,
-            category_ids: category_map[category],
-            min_price: min_price,
-            max_price: max_price,
-            excluded_ids: get_excluded_ids
-          )
-          
-          return render_paginated_items(tagged_items, "#{category.capitalize} Essentials", page, per_page)
-        end
+  # If sub_category_id is not valid, or not provided
+  category_map = {
+    'uniforms' => MainCategory.where(name: ['Uniform', 'School Wear', 'Uniforms']).pluck(:id),
+    'sports' => MainCategory.where(name: ['Sport', 'Sports', 'Sports Gear']).pluck(:id),
+    'accessories' => MainCategory.where(name: ['Accessories']).pluck(:id),
+    'stationery' => MainCategory.where(name: ['Stationery', 'Stationary']).pluck(:id)
+  }
 
-        # Return all categories
-        all_items = []
-        category_map.each do |cat_name, cat_ids|
-          tagged_items = get_items_with_fallback(
-            school_id: school_id,
-            nearby_ids: nearby_ids,
-            limit: 6,
-            category_ids: cat_ids,
-            min_price: min_price,
-            max_price: max_price,
-            excluded_ids: get_excluded_ids
-          )
-          
-          all_items << {
-            title: "#{cat_name.capitalize} Essentials",
-            category: cat_name,
-            items: format_items(tagged_items.first(6))
-          }
-        end
+  # If category is provided
+  if category.present? && category_map[category].present?
+    tagged_items = get_items_with_fallback(
+      school_id: school_id,
+      nearby_ids: nearby_ids,
+      limit: per_page.to_i * 2,
+      category_ids: category_map[category],
+      min_price: min_price,
+      max_price: max_price,
+      excluded_ids: get_excluded_ids
+    )
+    
+    return render_paginated_items(tagged_items, "#{category.capitalize} Essentials", page, per_page)
+  end
 
-        render json: {
-          success: true,
-          school_id: school_id,
-          sections: all_items
-        }
-      end
+  # Return all categories as sections
+  all_items = []
+  category_map.each do |cat_name, cat_ids|
+    tagged_items = get_items_with_fallback(
+      school_id: school_id,
+      nearby_ids: nearby_ids,
+      limit: 6,
+      category_ids: cat_ids,
+      min_price: min_price,
+      max_price: max_price,
+      excluded_ids: get_excluded_ids
+    )
+    
+    all_items << {
+      title: "#{cat_name.capitalize} Essentials",
+      category: cat_name,
+      items: format_items(tagged_items.first(6))
+    }
+  end
+
+  render json: {
+    success: true,
+    school_id: school_id,
+    sections: all_items
+  }
+end
       
       # GET /api/v1/recommendations/trending/all
       def trending_all
@@ -850,6 +855,12 @@ module Api
       # 🔥 UNIFIED FALLBACK HELPER
       # ================================================================
       
+# In recommendations_controller.rb - FIXED get_items_with_fallback
+
+# ================================================================
+# 🔥 UPDATED: UNIFIED FALLBACK HELPER - OPTIMIZED
+# ================================================================
+
 def get_items_with_fallback(options = {})
   school_id      = options[:school_id]
   nearby_ids     = options[:nearby_ids] || []
@@ -864,87 +875,322 @@ def get_items_with_fallback(options = {})
   items = []
   collected_ids = []
 
-  # -------------------------------------------------
-  # Step 1: Real items from the selected school
-  # -------------------------------------------------
+  # Fetch school once for province lookups
+  school = School.find_by(id: school_id) if school_id
+
+  # ================================================================
+  # STEP 1: Real items from the selected school (is_system: false)
+  # ================================================================
   school_real = get_items_by_location(school_id, category_ids, sub_category_id, period, min_price, max_price, excluded_ids)
   school_real = with_all_associations(school_real)
   items += school_real.to_a
   collected_ids += items.map(&:id)
 
-  # -------------------------------------------------
-  # Step 2: System items that BELONG to the selected school  ← NEW
-  # -------------------------------------------------
-  if items.size < limit
-    school_system = Item.where(
-      school_id: school_id,
+  needed = limit - items.size
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 2: Nearby schools - SAME sub-category (is_system: false)
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if nearby_ids.any? && needed > 0
+    nearby_same_sub_items = get_items_by_location(
+      nearby_ids, 
+      category_ids,
+      sub_category_id,
+      period, 
+      min_price, 
+      max_price, 
+      excluded_ids + collected_ids
+    )
+    nearby_same_sub_items = with_all_associations(nearby_same_sub_items).limit(needed).to_a
+    
+    if nearby_same_sub_items.any?
+      items += nearby_same_sub_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{nearby_same_sub_items.size} items with SAME sub-category from nearby schools"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 3: Same province - SAME sub-category (is_system: false)
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if needed > 0 && school&.province_id
+    province_same_sub_items = get_items_by_province(
+      school.province_id, 
+      category_ids,
+      sub_category_id,
+      period, 
+      min_price, 
+      max_price, 
+      excluded_ids + collected_ids
+    )
+    province_same_sub_items = with_all_associations(province_same_sub_items).limit(needed).to_a
+    
+    if province_same_sub_items.any?
+      items += province_same_sub_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{province_same_sub_items.size} items with SAME sub-category from same province"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 4: Anywhere - SAME sub-category (is_system: false)
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if needed > 0
+    global_same_sub_items = get_items_global(
+      category_ids,
+      sub_category_id,
+      period, 
+      min_price, 
+      max_price, 
+      excluded_ids + collected_ids
+    )
+    global_same_sub_items = with_all_associations(global_same_sub_items).limit(needed).to_a
+    
+    if global_same_sub_items.any?
+      items += global_same_sub_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{global_same_sub_items.size} items with SAME sub-category from anywhere"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 5: SYSTEM ITEMS - SAME sub-category
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if needed > 0
+    system_same_sub_items = Item.where(
       is_system: true,
       deleted: false,
       status: 'active'
     )
-    school_system = school_system.where(main_category_id: category_ids) if category_ids.present?
-    school_system = school_system.where(sub_category_id: sub_category_id) if sub_category_id.present?
-    school_system = school_system.where('price >= ?', min_price) if min_price.present?
-    school_system = school_system.where('price <= ?', max_price) if max_price.present?
-    school_system = school_system.where.not(id: excluded_ids + collected_ids) if (excluded_ids + collected_ids).any?
-    school_system = apply_time_filter(school_system, period) if period.present?
-    school_system = with_all_associations(school_system)
+    system_same_sub_items = system_same_sub_items.where(main_category_id: category_ids) if category_ids.present?
+    system_same_sub_items = system_same_sub_items.where(sub_category_id: sub_category_id) if sub_category_id.present?
+    system_same_sub_items = system_same_sub_items.where('price >= ?', min_price) if min_price.present?
+    system_same_sub_items = system_same_sub_items.where('price <= ?', max_price) if max_price.present?
+    system_same_sub_items = system_same_sub_items.where.not(id: excluded_ids + collected_ids) if (excluded_ids + collected_ids).any?
+    system_same_sub_items = system_same_sub_items.order(display_order: :asc, view_count: :desc)
+    system_same_sub_items = with_all_associations(system_same_sub_items).limit(needed).to_a
     
-    items += school_system.limit(limit - items.size).to_a
-    collected_ids = items.map(&:id)
-  end
-
-  needed = limit - items.size
-  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
-
-  # -------------------------------------------------
-  # Step 3: Nearby schools (real items only)
-  # -------------------------------------------------
-  if nearby_ids.any? && needed > 0
-    nearby = get_items_by_location(nearby_ids, category_ids, sub_category_id, period, min_price, max_price, excluded_ids + collected_ids)
-    nearby = with_all_associations(nearby)
-    items += nearby.limit(needed).to_a
-    collected_ids = items.map(&:id)
-    needed = limit - items.size
-  end
-
-  # -------------------------------------------------
-  # Step 4: Same province
-  # -------------------------------------------------
-  if needed > 0
-    school = School.find_by(id: school_id)
-    if school&.province_id
-      province = get_items_by_province(school.province_id, category_ids, sub_category_id, period, min_price, max_price, excluded_ids + collected_ids)
-      province = with_all_associations(province)
-      items += province.limit(needed).to_a
+    if system_same_sub_items.any?
+      items += system_same_sub_items
       collected_ids = items.map(&:id)
       needed = limit - items.size
+      Rails.logger.info "📦 Found #{system_same_sub_items.size} SYSTEM items with SAME sub-category"
     end
   end
 
-  # -------------------------------------------------
-  # Step 5: Global real items
-  # -------------------------------------------------
-  if needed > 0
-    global = get_items_global(category_ids, sub_category_id, period, min_price, max_price, excluded_ids + collected_ids)
-    global = with_all_associations(global)
-    items += global.limit(needed).to_a
-    collected_ids = items.map(&:id)
-    needed = limit - items.size
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 6: Nearby schools - SAME category (any sub-category) - REAL items
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if nearby_ids.any? && needed > 0
+    nearby_same_cat_items = get_items_by_location(
+      nearby_ids, 
+      category_ids,
+      nil,  # Any sub-category
+      period, 
+      min_price, 
+      max_price, 
+      excluded_ids + collected_ids
+    )
+    nearby_same_cat_items = with_all_associations(nearby_same_cat_items).limit(needed).to_a
+    
+    if nearby_same_cat_items.any?
+      items += nearby_same_cat_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{nearby_same_cat_items.size} items with SAME category from nearby schools"
+    end
   end
 
-  # -------------------------------------------------
-  # Step 6: Remaining system items from anywhere (true last resort)
-  # -------------------------------------------------
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 6b: Same province - SAME category (any sub-category) - REAL items
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if needed > 0 && school&.province_id
+    province_same_cat_items = get_items_by_province(
+      school.province_id,
+      category_ids,
+      nil,  # Any sub-category
+      period,
+      min_price,
+      max_price,
+      excluded_ids + collected_ids
+    )
+    province_same_cat_items = with_all_associations(province_same_cat_items).limit(needed).to_a
+
+    if province_same_cat_items.any?
+      items += province_same_cat_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{province_same_cat_items.size} items with SAME category from same province"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 7: Anywhere - SAME category (any sub-category) - REAL items
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
   if needed > 0
-    system_items = get_system_items(category_ids, sub_category_id, needed)
-    # Avoid duplicates
-    system_items = system_items.reject { |i| collected_ids.include?(i.id) }
-    items += system_items.first(needed)
+    global_same_cat_items = get_items_global(
+      category_ids,
+      nil,  # Any sub-category
+      period, 
+      min_price, 
+      max_price, 
+      excluded_ids + collected_ids
+    )
+    global_same_cat_items = with_all_associations(global_same_cat_items).limit(needed).to_a
+    
+    if global_same_cat_items.any?
+      items += global_same_cat_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{global_same_cat_items.size} items with SAME category from anywhere"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 8: SYSTEM ITEMS - SAME category (any sub-category)
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if needed > 0
+    system_same_cat_items = Item.where(
+      is_system: true,
+      deleted: false,
+      status: 'active'
+    )
+    system_same_cat_items = system_same_cat_items.where(main_category_id: category_ids) if category_ids.present?
+    system_same_cat_items = system_same_cat_items.where('price >= ?', min_price) if min_price.present?
+    system_same_cat_items = system_same_cat_items.where('price <= ?', max_price) if max_price.present?
+    system_same_cat_items = system_same_cat_items.where.not(id: excluded_ids + collected_ids) if (excluded_ids + collected_ids).any?
+    system_same_cat_items = system_same_cat_items.order(display_order: :asc, view_count: :desc)
+    system_same_cat_items = with_all_associations(system_same_cat_items).limit(needed).to_a
+    
+    if system_same_cat_items.any?
+      items += system_same_cat_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{system_same_cat_items.size} SYSTEM items with SAME category"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 9: Nearby schools - ANY category (absolute last resort for real items)
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if nearby_ids.any? && needed > 0
+    nearby_any_items = get_items_by_location(
+      nearby_ids, 
+      nil,  # Any category
+      nil,  # Any sub-category
+      period, 
+      min_price, 
+      max_price, 
+      excluded_ids + collected_ids
+    )
+    nearby_any_items = with_all_associations(nearby_any_items).limit(needed).to_a
+    
+    if nearby_any_items.any?
+      items += nearby_any_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{nearby_any_items.size} items from nearby schools (any category)"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 9b: Same province - ANY category (last resort for real items)
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if needed > 0 && school&.province_id
+    province_any_items = get_items_by_province(
+      school.province_id,
+      nil,  # Any category
+      nil,  # Any sub-category
+      period,
+      min_price,
+      max_price,
+      excluded_ids + collected_ids
+    )
+    province_any_items = with_all_associations(province_any_items).limit(needed).to_a
+
+    if province_any_items.any?
+      items += province_any_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{province_any_items.size} items from same province (any category)"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 10: Anywhere - ANY category (last resort for real items)
+  # ✅ FIX: Single query, no .any?/.count redundancy
+  # ================================================================
+  if needed > 0
+    global_any_items = get_items_global(
+      nil,  # Any category
+      nil,  # Any sub-category
+      period, 
+      min_price, 
+      max_price, 
+      excluded_ids + collected_ids
+    )
+    global_any_items = with_all_associations(global_any_items).limit(needed).to_a
+    
+    if global_any_items.any?
+      items += global_any_items
+      collected_ids = items.map(&:id)
+      needed = limit - items.size
+      Rails.logger.info "📦 Found #{global_any_items.size} items from anywhere (any category)"
+    end
+  end
+
+  return tag_and_rank_items(items, school_id, nearby_ids) if needed <= 0
+
+  # ================================================================
+  # STEP 11: SYSTEM ITEMS - ANY category (ABSOLUTE LAST RESORT)
+  # ================================================================
+  if needed > 0
+    system_any_items = get_system_items(nil, nil, needed)
+    system_any_items = system_any_items.reject { |i| collected_ids.include?(i.id) }
+    items += system_any_items.first(needed)
+    
+    if items.any?
+      Rails.logger.info "📦 Added #{system_any_items.first(needed).count} SYSTEM items (any category) as absolute last resort"
+    end
   end
 
   tag_and_rank_items(items, school_id, nearby_ids)
 end
+
       
       def get_items_by_location(school_ids, category_ids, sub_category_id, period, min_price, max_price, excluded_ids)
         scope = Item.where(deleted: false, status: 'active', is_system: false)
@@ -966,7 +1212,6 @@ end
       def get_items_global(category_ids, sub_category_id, period, min_price, max_price, excluded_ids)
         get_items_by_location(nil, category_ids, sub_category_id, period, min_price, max_price, excluded_ids)
       end
-      
       def get_system_items(category_ids, sub_category_id, limit)
         scope = Item.where(is_system: true, deleted: false, status: 'active')
         scope = scope.where(main_category_id: category_ids) if category_ids.present?
@@ -976,15 +1221,21 @@ end
         scope.limit(limit).to_a
       end
       
-      def get_excluded_ids
-        return [] unless @current_user
-        
-        viewed_ids = UserItemView.where(user_id: @current_user.id).recent.pluck(:item_id)
-        favorited_ids = Favorite.where(user_id: @current_user.id).pluck(:item_id)
-        purchased_ids = PurchaseHistory.where(user_id: @current_user.id).pluck(:item_id)
-        
-        (viewed_ids + favorited_ids + purchased_ids).uniq.first(50)
-      end
+def get_excluded_ids
+  return [] unless @current_user
+  
+  # ✅ FIX: Use pluck for each query and combine
+  viewed_ids = UserItemView.where(user_id: @current_user.id).recent.pluck(:item_id)
+  favorited_ids = Favorite.where(user_id: @current_user.id).pluck(:item_id)
+  purchased_ids = PurchaseHistory.where(user_id: @current_user.id).pluck(:item_id)
+  
+  # Combine and limit
+  (viewed_ids + favorited_ids + purchased_ids).uniq.first(50)
+end
+
+def compute_excluded_ids
+  @cached_excluded_ids ||= get_excluded_ids
+end
       
       # ================================================================
       # 🔧 RANKING HELPER METHODS
@@ -1046,6 +1297,7 @@ end
             brand: item.brand&.name,
             school_name: item.school&.name,
             school_id: item.school_id,
+            school_logo_url: item.school&.logo_url,
             relevance: item.relevance,
             is_system: item.is_system,
             images: item.all_image_urls,  # REMOVED DUPLICATE
@@ -1080,6 +1332,7 @@ end
             school_id: item.school_id,
             school: item.school&.name,
             school_name: item.school&.name,
+            school_logo_url: item.school&.logo_url, 
             category: item.main_category&.name,
             main_category_id: item.main_category_id,
             sub_category_id: item.sub_category_id,
@@ -1108,7 +1361,31 @@ end
       # ================================================================
       # EXISTING HELPERS
       # ================================================================
-      
+      # ================================================================
+# 🔥 NEW: Memoized Category Helpers
+# ================================================================
+
+def uniform_category_ids
+  @uniform_category_ids ||= MainCategory.where(name: ['Uniform', 'School Wear', 'Uniforms']).pluck(:id)
+end
+
+def sport_category_ids
+  @sport_category_ids ||= MainCategory.where(name: ['Sport', 'Sports', 'Sports Gear']).pluck(:id)
+end
+
+def accessory_category_ids
+  @accessory_category_ids ||= MainCategory.where(name: ['Accessories']).pluck(:id)
+end
+
+def stationery_category_ids
+  @stationery_category_ids ||= MainCategory.where(name: ['Stationery', 'Stationary']).pluck(:id)
+end
+
+# ✅ Update all references to use these memoized methods
+# Example:
+# uniform_cat = MainCategory.where(name: ['Uniform', 'School Wear', 'Uniforms']).pluck(:id)
+# becomes:
+# uniform_cat = uniform_category_ids
       def with_all_associations(scope)
         scope.includes(:main_category, :sub_category, :gender, :item_condition, :brand, :school, :item_variants)
       end
