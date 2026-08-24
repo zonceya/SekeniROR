@@ -177,7 +177,12 @@ module Api
           
           item_params = item_params_for_create.to_h
           item_params = item_params.except(:size_id, :color_id, :item_condition_id, :price, :quantity)
-          item_params[:total_quantity] = variant_params[:quantity].to_i if variant_params[:quantity]
+             item_params[:price] = variant_params[:price] if variant_params[:price].present?
+              item_params[:quantity] = variant_params[:quantity] if variant_params[:quantity].present?
+              item_params[:total_quantity] = variant_params[:quantity].to_i if variant_params[:quantity]
+              
+              # ✅ FIX 2: Ensure school_id is set
+              item_params[:school_id] = params[:item][:school_id] if params[:item][:school_id].present?
           
           item = shop.items.new(item_params)
           item.item_type_id = nil
@@ -607,76 +612,131 @@ def shop_items
   }
 end
 
-      # OPTIMIZED SHOW METHOD - NO N+1 QUERIES
-      def show
-        # Eager load everything needed
-        item = Item.includes(
-          :main_category, :sub_category, :gender, :school,
-          :province, :location, :brand, :item_condition, :tags,
-          shop: :user,
-          item_variants: [:size, :color, :condition]
-        ).find_by(id: params[:id], deleted: false)
-        track_item_view(item)
-        if item.nil?
-          return render json: { error: "Item not found" }, status: :not_found
-        end
-        
-        primary_variant = item.item_variants.find(&:is_active?)
-        
-        render json: {
-          success: true,
-          item: {
-            id: item.id,
-            name: item.name,
-            description: item.description,
-            price: item.price.to_f,
-            quantity: item.quantity,
-            available_quantity: item.available_quantity,
-            status: item.status,
-            main_category: item.main_category&.as_json,
-            sub_category: item.sub_category&.as_json,
-            gender: item.gender&.as_json,
-            school: {
-                id: item.school&.id,
-                name: item.school&.name,
-                logo_url: item.school&.logo_url  # ← ADD THIS
-              },
-            size: primary_variant&.size&.as_json,
-            color: primary_variant&.color&.as_json,
-            condition: primary_variant&.condition&.as_json || item.item_condition&.as_json,
-            brand: item.brand&.as_json,
-            province: item.province&.as_json,
-            town: item.location&.as_json,
-            created_at: item.created_at,
-            updated_at: item.updated_at,
-            view_count: item.view_count,
-            shop: {
-              id: item.shop&.id,
-              name: item.shop&.name,
-              display_name: item.shop&.display_name,
-              seller_name: item.shop&.user&.name,
-              seller_mobile: item.shop&.user&.mobile
-            },
-            cover_photo: item.cover_photo,
-            images: item.all_image_urls,
-            tags: item.tags.as_json,
-            variants: item.item_variants.where(is_active: true).map do |variant|
-              {
-                id: variant.id,
-                size_id: variant.size_id,
-                size_name: variant.size&.name,
-                color_id: variant.color_id,
-                color_name: variant.color&.name,
-                condition_id: variant.condition_id,
-                condition_name: variant.condition&.name,
-                price: variant.price.to_f,
-                quantity: variant.quantity,
-                is_active: variant.is_active
-              }
-            end
-          }
+# app/controllers/api/v1/items_controller.rb
+
+# app/controllers/api/v1/items_controller.rb
+
+def show
+  item = Item.includes(
+    :main_category, :sub_category, :gender, :school,
+    :province, :location, :brand, :item_condition, :tags,
+    shop: :user,
+    item_variants: [:size, :color, :condition]
+  ).find_by(id: params[:id], deleted: false)
+
+  if item.nil?
+    return render json: { error: "Item not found" }, status: :not_found
+  end
+
+  track_item_view(item)
+
+  primary_variant = item.item_variants.find(&:is_active?)
+
+  # ✅ GENERATE FRESH IMAGE URLs
+  fresh_image_urls = generate_fresh_image_urls(item)
+  cover_photo = fresh_image_urls.first
+
+  render json: {
+    success: true,
+    item: {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price: item.price.to_f,
+      quantity: item.quantity,
+      available_quantity: item.available_quantity,
+      status: item.status,
+      main_category: item.main_category&.as_json,
+      sub_category: item.sub_category&.as_json,
+      gender: item.gender&.as_json,
+      school: {
+        id: item.school&.id,
+        name: item.school&.name,
+        logo_url: item.school&.logo_url
+      },
+      size: primary_variant&.size&.as_json,
+      color: primary_variant&.color&.as_json,
+      condition: primary_variant&.condition&.as_json || item.item_condition&.as_json,
+      brand: item.brand&.as_json,
+      province: item.province&.as_json,
+      town: item.location&.as_json,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      view_count: item.view_count,
+      shop: {
+        id: item.shop&.id,
+        name: item.shop&.name,
+        display_name: item.shop&.display_name,
+        seller_name: item.shop&.user&.name,
+        seller_mobile: item.shop&.user&.mobile
+      },
+      cover_photo: cover_photo,
+      images: fresh_image_urls,  # ✅ Use fresh URLs
+      tags: item.tags.as_json,
+      variants: item.item_variants.where(is_active: true).map do |variant|
+        {
+          id: variant.id,
+          size_id: variant.size_id,
+          size_name: variant.size&.name,
+          color_id: variant.color_id,
+          color_name: variant.color&.name,
+          condition_id: variant.condition_id,
+          condition_name: variant.condition&.name,
+          price: variant.price.to_f,
+          quantity: variant.quantity,
+          is_active: variant.is_active
         }
       end
+    }
+  }
+end
+
+private
+
+def generate_fresh_image_urls(item)
+  return [] unless item.images.attached?
+
+  s3_client = Aws::S3::Client.new(
+    access_key_id: ENV['R2_ACCESS_KEY_ID'],
+    secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
+    endpoint: ENV['R2_ENDPOINT'],
+    region: 'auto',
+    force_path_style: true
+  )
+
+  signer = Aws::S3::Presigner.new(client: s3_client)
+
+  item.images.map do |image|
+    begin
+      signer.presigned_url(
+        :get_object,
+        bucket: ENV['R2_BUCKET_NAME'],
+        key: image.key,
+        expires_in: 3600  # 1 hour
+      )
+    rescue => e
+      Rails.logger.error "Failed to generate URL for image #{image.id}: #{e.message}"
+      nil
+    end
+  end.compact
+end
+
+private
+
+def track_item_view(item)
+  # ✅ Safe tracking with error handling
+  UserItemView.track(
+    @current_user&.id,
+    item.id,
+    item.school_id,
+    'item_detail',
+    session.id
+  )
+rescue => e
+  # ✅ View tracking must NEVER block the item response
+  Rails.logger.error "Failed to track item view for item #{item.id}: #{e.message}"
+  # Swallow the error - the item response is more important
+end
 
       def my_shop_items
         shop = @current_user.shop

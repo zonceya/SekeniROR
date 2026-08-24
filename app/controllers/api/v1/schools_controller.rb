@@ -74,7 +74,7 @@ module Api
             school_type: school.school_type
           }
         }
-      rescue ActiveRecord::RecordNotFound
+        rescue ActiveRecord::RecordNotFound
         render json: { error: "School not found" }, status: :not_found
       end
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_10_224713) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_23_234808) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -698,7 +698,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_10_224713) do
   create_table "user_item_views", force: :cascade do |t|
     t.bigint "user_id"
     t.uuid "item_id", null: false
-    t.integer "school_id", null: false
+    t.integer "school_id"
     t.string "source"
     t.string "session_id"
     t.integer "view_count", default: 1
