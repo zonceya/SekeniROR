@@ -162,7 +162,38 @@ class Item < ApplicationRecord
     Rails.logger.error "Failed to generate URL for image #{image.id}: #{e.message}"
     nil
   end
+ def self.s3_signer
+    @s3_signer ||= begin
+      s3_client = Aws::S3::Client.new(
+        access_key_id: ENV['R2_ACCESS_KEY_ID'],
+        secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
+        endpoint: ENV['R2_ENDPOINT'],
+        region: 'auto',
+        force_path_style: true
+      )
+      Aws::S3::Presigner.new(client: s3_client)
+    end
+  end
 
+  def generate_presigned_url(image)
+    self.class.s3_signer.presigned_url(
+      :get_object,
+      bucket: ENV['R2_BUCKET_NAME'],
+      key: image.key,
+      expires_in: 3600
+    )
+  rescue => e
+    Rails.logger.error "Failed to generate URL for image #{image.id}: #{e.message}"
+    nil
+  end
+   def self.with_all_associations(scope = all)
+    scope.includes(
+      :main_category, :sub_category, :gender, :item_condition, :brand, :school,
+      :province, :location, :shop,
+      :item_variants,
+      images_attachments: :blob  # ✅ Preload ActiveStorage attachments
+    )
+  end
   # ============================================
   # PRIVATE METHODS
   # ============================================

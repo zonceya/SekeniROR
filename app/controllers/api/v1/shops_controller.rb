@@ -1,3 +1,4 @@
+# app/controllers/api/v1/shops_controller.rb
 module Api
   module V1
     class ShopsController < ApplicationController
@@ -17,6 +18,7 @@ module Api
               display_name: shop.display_name || "",
               user_id: shop.user_id,
               seller_name: shop.user.name,
+              logo: shop.logo,  # ✅ ADDED
               created_at: shop.created_at,
               items_count: shop.items.where(deleted: false).count
             }
@@ -47,7 +49,8 @@ module Api
             shop: {
               id: shop.id,
               name: shop.name,
-              display_name: shop.display_name || ""
+              display_name: shop.display_name || "",
+              logo: shop.logo  # ✅ ADDED
             }
           }, status: :ok
         else
@@ -60,54 +63,54 @@ module Api
       end
       
       # GET /api/v1/shops/:id/items - Public shop items
-     # GET /api/v1/shops/:id/items - Public shop items
-def items
-  shop = Shop.find_by(id: params[:id])
-  
-  if shop.nil?
-    return render json: { 
-      success: false, 
-      error: "Shop not found" 
-    }, status: :not_found
-  end
-  
-  items = shop.items.where(deleted: false, status: 'active')
-  
-  # Apply filters if needed
-  if params[:sort] == 'newest'
-    items = items.order(created_at: :desc)
-  end
-  
-  # ✅ FIX: Include variants to get the actual price
-  render json: {
-    success: true,
-    shop: {
-      id: shop.id,
-      name: shop.public_name,
-      seller_name: shop.user.name
-    },
-    items: items.as_json(
-      include: {
-        variants: {  # ← ADD THIS - include variants with price
-          only: [:id, :price, :quantity, :size_id, :color_id, :condition_id]
-        },
-        shop: {
-          only: [:id, :name]
+      def items
+        shop = Shop.find_by(id: params[:id])
+        
+        if shop.nil?
+          return render json: { 
+            success: false, 
+            error: "Shop not found" 
+          }, status: :not_found
+        end
+        
+        items = shop.items.where(deleted: false, status: 'active')
+        
+        # Apply filters if needed
+        if params[:sort] == 'newest'
+          items = items.order(created_at: :desc)
+        end
+        
+        render json: {
+          success: true,
+          shop: {
+            id: shop.id,
+            name: shop.public_name,
+            seller_name: shop.user.name,
+            logo: shop.logo  # ✅ ADDED
+          },
+          items: items.as_json(
+            include: {
+              variants: {
+                only: [:id, :price, :quantity, :size_id, :color_id, :condition_id]
+              },
+              shop: {
+                only: [:id, :name]
+              }
+            },
+            methods: [:cover_photo_url, :image_urls]
+          ).map do |item|
+            # Get the first variant (most items have one variant for simple items)
+            variant = item['variants']&.first
+            
+            # Override price with variant price
+            item['price'] = variant&.[]('price') || 0.0
+            item['quantity'] = variant&.[]('quantity') || item['total_quantity']
+            
+            item
+          end
         }
-      },
-      methods: [:cover_photo_url, :image_urls]  # Include image methods if you have them
-    ).map do |item|
-      # Get the first variant (most items have one variant for simple items)
-      variant = item['variants']&.first
+      end
       
-      # Override price with variant price
-      item['price'] = variant&.[]('price') || 0.0
-      item['quantity'] = variant&.[]('quantity') || item['total_quantity']
-      
-      item
-    end
-  }
-end
       # GET /api/v1/shops/:id - Public shop view
       def public_show
         shop = Shop.find_by(id: params[:id])
@@ -124,6 +127,7 @@ end
           shop: {
             id: shop.id,
             name: shop.public_name,
+            logo: shop.logo,  # ✅ ADDED
             seller: {
               id: shop.user.id,
               name: shop.user.name
