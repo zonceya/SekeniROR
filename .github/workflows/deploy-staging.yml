@@ -31,10 +31,11 @@ jobs:
           echo "💎 Installing gems..."
           bundle install --without development test
 
-          echo "🗄️ Running staging migrations..."
+          echo "Running staging migrations..."
+          export FIREBASE_SERVICE_ACCOUNT_JSON="$(cat /etc/skoolswap/firebase-service-account.json)"
           RAILS_ENV=staging bundle exec rails db:migrate
 
-          echo "🎨 Precompiling assets..."
+          echo "Precompiling assets..."
           RAILS_ENV=staging bundle exec rails assets:precompile
 
           echo "🔄 Restarting Rails..."
