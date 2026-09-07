@@ -22,6 +22,11 @@ jobs:
 
           cd "$APP_DIR"
 
+          echo "🔐 Loading staging environment..."
+          set -a
+          source /etc/skoolswap/staging.env
+          set +a
+
           echo "📥 Fetching latest main..."
           git fetch origin main
 
@@ -44,4 +49,3 @@ jobs:
           touch tmp/restart.txt
 
           echo "✅ Staging deployment complete!"
-# staging deployment test
