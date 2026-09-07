@@ -24,7 +24,7 @@ jobs:
 
           echo "🔐 Loading staging environment..."
           set -a
-          source /etc/skoolswap/staging.env
+          source /etc/skoolswap/r2.env
           set +a
 
           echo "📥 Fetching latest main..."
