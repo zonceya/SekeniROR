@@ -1109,9 +1109,9 @@ end
       # EXISTING HELPERS
       # ================================================================
       
-      def with_all_associations(scope)
-        scope.includes(:main_category, :sub_category, :gender, :item_condition, :brand, :school, :item_variants)
-      end
+def with_all_associations(scope)
+  scope.includes(:main_category, :sub_category, :gender, :item_condition, :brand, :school, :item_variants, images_attachments: :blob)
+end
       
       def set_user_context
         @user_school_id = nil
