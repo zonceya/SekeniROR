@@ -25,38 +25,40 @@ class Item < ApplicationRecord
   validates :price, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
 
   enum :status, { inactive: 0, active: 1, sold: 2, archived: 3 }, default: :active
-  
+
   before_save :set_categories_from_item_type, if: -> { item_type_id.present? && (main_category_id.blank? || sub_category_id.blank?) }
-  
+
   # FIXED: Renamed store_accessor to avoid conflicting with belongs_to :size and :color
   store_accessor :meta, :meta_color, :meta_size
-  
+
   # ============================================
   # VIRTUAL ATTRIBUTES
   # ============================================
   attr_accessor :quantity, :reserved
-  
+
   def quantity
     @quantity || self[:total_quantity] || 0
   end
-  
+
   def quantity=(value)
     @quantity = value.to_i
     self.total_quantity = value.to_i
   end
+
   def view_count
-  self[:view_count].presence || UserItemView.where(item_id: id).count
+    self[:view_count].presence || UserItemView.where(item_id: id).count
   end
   public :view_count
+
   def reserved
     @reserved || self[:total_reserved] || 0
   end
-  
+
   def reserved=(value)
     @reserved = value.to_i
     self.total_reserved = value.to_i
   end
- 
+
   def available_quantity
     quantity.to_i - reserved.to_i
   end
@@ -64,20 +66,35 @@ class Item < ApplicationRecord
   def can_fulfill?(requested_quantity)
     available_quantity >= requested_quantity
   end
-  
+
   def validate_image_limit
     if images.attached? && images.size > 3
       errors.add(:images, "cannot exceed 3 images")
     end
   end
-  
+
   # ============================================
   # IMAGE METHODS
   # ============================================
-  
+  #
+  # Single source of truth for turning an attached image into a URL.
+  #
+  # When R2_PUBLIC_BASE_URL is set (e.g. https://img.skoolswap.co.za),
+  # URLs are permanent — no expiry, cacheable, CDN-friendly.
+  # When it's not set, we fall back to presigned URLs (1-hour expiry),
+  # so this change is safe to deploy before the bucket is public.
+
+  # Build a URL for one attached image.
+  def image_url_for(image)
+    base = ENV['R2_PUBLIC_BASE_URL']
+    return "#{base.chomp('/')}/#{image.key}" if base.present?
+
+    generate_presigned_url(image)
+  end
+
   def cover_photo
     if images.attached? && images.first.present?
-      generate_presigned_url(images.first)
+      image_url_for(images.first)
     elsif self[:cover_photo].present?
       self[:cover_photo]
     else
@@ -89,7 +106,7 @@ class Item < ApplicationRecord
     urls = []
 
     if images.attached?
-      urls += images.map { |img| generate_presigned_url(img) }.compact
+      urls += images.map { |img| image_url_for(img) }.compact
     end
 
     if self[:cover_photo].present? && !urls.include?(self[:cover_photo])
@@ -129,11 +146,11 @@ class Item < ApplicationRecord
 
   def generate_item_image_urls
     return [] unless images.attached?
-    
+
     images.map do |image|
       {
         id: image.id,
-        url: generate_presigned_url(image),
+        url: image_url_for(image),
         filename: image.filename.to_s,
         content_type: image.content_type,
         created_at: image.created_at
@@ -141,25 +158,32 @@ class Item < ApplicationRecord
     end
   end
 
+  # Reusable presigner. Previously a new S3 client + presigner was built
+  # per image per request (2N clients for N items), which is wasteful.
+  # Memoized at class level now.
+  def self.r2_presigner
+    @r2_presigner ||= begin
+      client = Aws::S3::Client.new(
+        access_key_id: ENV.fetch('R2_ACCESS_KEY_ID'),
+        secret_access_key: ENV.fetch('R2_SECRET_ACCESS_KEY'),
+        endpoint: ENV.fetch('R2_ENDPOINT'),
+        region: 'auto',
+        force_path_style: true
+      )
+      Aws::S3::Presigner.new(client: client)
+    end
+  end
+
+  # Only called when R2_PUBLIC_BASE_URL is not configured.
   def generate_presigned_url(image)
-    s3_client = Aws::S3::Client.new(
-      access_key_id: ENV['R2_ACCESS_KEY_ID'],
-      secret_access_key: ENV['R2_SECRET_ACCESS_KEY'],
-      endpoint: ENV['R2_ENDPOINT'],
-      region: 'auto',
-      force_path_style: true
-    )
-    
-    signer = Aws::S3::Presigner.new(client: s3_client)
-    
-    signer.presigned_url(
+    self.class.r2_presigner.presigned_url(
       :get_object,
-      bucket: ENV['R2_BUCKET_NAME'],
+      bucket: ENV.fetch('R2_BUCKET_NAME'),
       key: image.key,
       expires_in: 3600
     )
   rescue => e
-    Rails.logger.error "Failed to generate URL for image #{image.id}: #{e.message}"
+    Rails.logger.error "Failed to generate presigned URL for image #{image.id}: #{e.message}"
     nil
   end
 
@@ -167,24 +191,24 @@ class Item < ApplicationRecord
   # PRIVATE METHODS
   # ============================================
   private
-  
+
   def validate_category_consistency
     return unless main_category && sub_category
-    
+
     if sub_category.main_category_id != main_category_id
       errors.add(:sub_category, "must belong to the selected main category")
     end
   end
-  
+
   def set_categories_from_item_type
     self.main_category_id ||= item_type.main_category_id
-    
+
     if main_category_id.present? && sub_category_id.blank?
       default_sub = main_category.sub_categories.find_by("name ILIKE ?", "%#{item_type.name}%")
       self.sub_category_id = default_sub.id if default_sub
     end
   end
- 
+
   def non_negative_inventory
     if self.quantity < 0
       errors.add(:quantity, "can't be negative")
