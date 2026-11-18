@@ -9,7 +9,7 @@ FIREBASE_CONFIG = if ENV['FIREBASE_SERVICE_ACCOUNT_JSON'].present?
   JSON.parse(ENV['FIREBASE_SERVICE_ACCOUNT_JSON'])
 else
   JSON.parse(
-    File.read(Rails.root.join('config/firebase-service-account.json'))
+    File.read(Rails.root.join('config/firebase_service_account.json'))
   )
 end
 

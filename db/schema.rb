@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_10_224713) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_01_210905) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -698,7 +698,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_10_224713) do
   create_table "user_item_views", force: :cascade do |t|
     t.bigint "user_id"
     t.uuid "item_id", null: false
-    t.integer "school_id", null: false
+    t.integer "school_id"
     t.string "source"
     t.string "session_id"
     t.integer "view_count", default: 1
@@ -752,6 +752,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_10_224713) do
     t.string "firebase_token"
     t.string "firebase_uid"
     t.string "external_profile_picture_url"
+    t.string "fcm_token"
     t.index ["auth_mode"], name: "index_users_on_auth_mode"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["firebase_uid"], name: "index_users_on_firebase_uid", unique: true

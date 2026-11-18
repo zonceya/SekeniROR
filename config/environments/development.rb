@@ -1,9 +1,9 @@
 require "active_support/core_ext/integer/time"
 require 'openssl'
-OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
+ #OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
-
+  config.logger = ActiveSupport::Logger.new(STDOUT)
   # Make code changes take effect immediately without server restart.
   config.enable_reloading = true
 
@@ -45,6 +45,7 @@ Rails.application.configure do
   config.active_support.deprecation = :log
   config.hosts << "api.skoolswap.co.za"
    #config.hosts << /[a-z0-9\-]+\.ngrok\-free\.app/
+# config.hosts << "api.skoolswap.online"
   config.force_ssl = false 
    # to start cloudfare -- cloudflared tunnel run sekeni-tunnel
 
