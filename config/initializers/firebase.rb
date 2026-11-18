@@ -5,16 +5,22 @@ require 'faraday'
 require 'openssl'
 
 # Load Firebase service account config with fallback
-FIREBASE_CONFIG = if ENV['FIREBASE_SERVICE_ACCOUNT_JSON'].present?
-  JSON.parse(ENV['FIREBASE_SERVICE_ACCOUNT_JSON'])
-else
-  JSON.parse(
-    File.read(Rails.root.join('config/firebase_service_account.json'))
-  )
+FIREBASE_CONFIG = begin
+  if ENV['FIREBASE_SERVICE_ACCOUNT_JSON'].present?
+    JSON.parse(ENV['FIREBASE_SERVICE_ACCOUNT_JSON'])
+  elsif Rails.root.join('config/firebase_service_account.json').exist?
+    JSON.parse(
+      File.read(Rails.root.join('config/firebase_service_account.json'))
+    )
+  else
+    Rails.logger.warn('Firebase credentials not configured; Firebase authentication unavailable.')
+    {}
+  end
 end
 
 def verify_firebase_token(id_token)
   return nil if id_token.blank?
+  return nil if FIREBASE_CONFIG.blank?
   
   project_id = FIREBASE_CONFIG['project_id']
   
