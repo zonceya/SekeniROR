@@ -8,14 +8,14 @@ require 'openssl'
 FIREBASE_CONFIG = begin
   if ENV['FIREBASE_SERVICE_ACCOUNT_JSON'].present?
     JSON.parse(ENV['FIREBASE_SERVICE_ACCOUNT_JSON'])
-  elsif Rails.root.join('config/firebase_service_account.json').exist?
-    JSON.parse(
-      File.read(Rails.root.join('config/firebase_service_account.json'))
-    )
+  elsif File.exist?(firebase_path)
+    JSON.parse(File.read(firebase_path))
   else
-    Rails.logger.warn('Firebase credentials not configured; Firebase authentication unavailable.')
     {}
   end
+rescue => e
+  Rails.logger.error("Firebase configuration error: #{e.message}")
+  {}
 end
 
 def verify_firebase_token(id_token)
