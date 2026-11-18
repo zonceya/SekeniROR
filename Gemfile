@@ -47,10 +47,9 @@ gem 'googleauth'
 gem 'fileutils'
 gem "fiddle" # to silence Ruby 3.5 warning about fiddle
 gem 'fcm'
-
+gem 'fcmpush'
 # Environment variables (MUST be at the top of groups)
 gem "dotenv-rails", "~> 3.1"
-gem 'firebase-admin-sdk'
 # AWS/R2 for file uploads
 gem 'aws-sdk-s3', '~> 1.0'
 gem 'down', '~> 5.0'
