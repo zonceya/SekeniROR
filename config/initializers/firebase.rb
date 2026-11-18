@@ -1,10 +1,10 @@
-# config/initializers/firebase.rb
 require 'json'
 require 'jwt'
 require 'faraday'
 require 'openssl'
 
-# Load Firebase service account config with fallback
+firebase_path = Rails.root.join('config/firebase_service_account.json')
+
 FIREBASE_CONFIG = begin
   if ENV['FIREBASE_SERVICE_ACCOUNT_JSON'].present?
     JSON.parse(ENV['FIREBASE_SERVICE_ACCOUNT_JSON'])
