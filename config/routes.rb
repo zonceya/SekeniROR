@@ -162,10 +162,19 @@ Rails.application.routes.draw do
       # ================================
       # 💬 CHAT ROUTES
       # ================================
-      resources :chat_rooms, only: [:index, :show, :create] do
-        resources :chat_messages, only: [:index, :create]
-        post 'mark_read', to: 'chat_messages#mark_as_read'
-      end
+   # ================================
+# 💬 CHAT ROUTES
+# ================================
+resources :chat_rooms, only: [:index, :show, :create] do
+  resources :chat_messages, only: [:index, :create]
+  post 'mark_read', to: 'chat_messages#mark_as_read'
+end
+
+# 🆕 FCM token save (top-level, not nested)
+patch 'users/fcm_token', to: 'users#update_fcm_token'
+
+# 🆕 Chat notification trigger (top-level, not nested)
+post 'chat_notifications/send', to: 'chat_notifications#send_notification'
       mount ActionCable.server => '/cable'
 
       # ================================

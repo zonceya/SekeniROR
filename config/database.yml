@@ -68,13 +68,25 @@ test:
 
 # Staging environment - for pre-production testing
 staging:
-  <<: *default
-  database: skoolswap_staging
-  username: postgres
-  password: 123456
-  host: localhost
-  pool: 5
-
+  primary: &primary_staging
+    <<: *default
+    database: skoolswap_staging
+    username: postgres
+    password: 123456
+    host: 127.0.0.1 
+    pool: 5
+  cache:
+    <<: *primary_staging
+    database: skoolswap_staging_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_staging
+    database: skoolswap_staging_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_staging
+    database: skoolswap_staging_cable
+    migrations_paths: db/cable_migrate
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
 # ever seen by anyone, they now have access to your database.

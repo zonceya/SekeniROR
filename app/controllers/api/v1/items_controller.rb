@@ -88,6 +88,7 @@ module Api
               id: item.shop&.id,
               name: item.shop&.name,
               display_name: item.shop&.display_name,
+              user_id: item.shop&.user_id,
               seller_name: item.shop&.user&.name,
               seller_mobile: item.shop&.user&.mobile
             },
@@ -213,18 +214,21 @@ module Api
               end
             end
 
-            image_urls = []
-            if params[:item] && params[:item][:images].present?
-              begin
-                image_upload_results = ImageUploadService.upload_item_images(
-                  item,
-                  params[:item][:images]
-                )
-                image_urls = item.generate_item_image_urls   # ── CHANGED
-              rescue => e
-                Rails.logger.error "Image upload error: #{e.message}"
-              end
+          image_urls = []
+          if params[:item] && params[:item][:images].present?
+            begin
+              image_upload_results = ImageUploadService.upload_item_images(
+                item,
+                params[:item][:images]
+              )
+              image_urls = item.generate_item_image_urls
+            rescue => e
+              Rails.logger.error "Image upload error: #{e.message}"
             end
+          end
+
+          # Bust home feed cache so new item + images appear immediately
+          invalidate_home_feed_cache(item.school_id)
 
             render json: {
               success: true,
@@ -311,8 +315,7 @@ module Api
           tag_ids: []
         )
       end
-
-      # ✅ FIXED: Use params[:id] consistently
+      
       def add_images
         item = Item.find_by(id: params[:id], deleted: false)
 
@@ -349,7 +352,7 @@ module Api
           image_upload_results = ImageUploadService.upload_item_images(item, params[:images])
           item.reload
           image_urls = item.images.attached? ? item.generate_item_image_urls : []   # ── CHANGED
-
+          invalidate_home_feed_cache(item.school_id)
           render json: {
             success: true,
             message: "Images added successfully",
@@ -364,9 +367,6 @@ module Api
           }, status: :internal_server_error
         end
       end
-
-      # ✅ FIXED: Use params[:id] consistently
-      # ── CHANGED: SSRF guard — only fetch from our own bucket host
       def attach_images_by_url
         item = Item.find_by(id: params[:id], deleted: false)
 
@@ -503,7 +503,7 @@ module Api
 
         image_attachment.purge
         ImageUploadService.clear_record_image_cache(item, :images)
-
+        invalidate_home_feed_cache(item.school_id)
         render json: {
           success: true,
           message: "Image removed successfully",
@@ -555,11 +555,11 @@ module Api
               update_item_tags
             end
 
-            # Handle image operations
+           
             handle_image_operations if image_operations_present?
             handle_image_replacement if params[:replace_images].present?
           end
-
+          invalidate_home_feed_cache(@item.school_id)
           render json: {
             success: true,
             message: "Item updated successfully",
@@ -660,6 +660,7 @@ module Api
             quantity: item.quantity,
             available_quantity: item.available_quantity,
             status: item.status,
+            is_system: item.is_system,  
             main_category: item.main_category&.as_json,
             sub_category: item.sub_category&.as_json,
             gender: item.gender&.as_json,
@@ -681,6 +682,7 @@ module Api
               id: item.shop&.id,
               name: item.shop&.name,
               display_name: item.shop&.display_name,
+              user_id: item.shop&.user_id,
               seller_name: item.shop&.user&.name,
               seller_mobile: item.shop&.user&.mobile
             },
@@ -787,6 +789,7 @@ module Api
             updated_at: @item.updated_at,
             shop: {
               id: @item.shop.id,
+              user_id: @item.shop.user_id,
               name: @item.shop.name,
               seller_name: @item.shop.user.name,
               seller_mobile: @item.shop.user.mobile
@@ -829,6 +832,7 @@ module Api
         end
 
         if @item.update(deleted: true)
+           invalidate_home_feed_cache(@item.school_id)
           render json: {
             success: true,
             message: 'Item soft-deleted successfully'
@@ -850,6 +854,7 @@ module Api
         end
 
         if @item.update(status: 'sold')
+          invalidate_home_feed_cache(@item.school_id)
           render json: {
             success: true,
             message: "Item marked as sold",
@@ -962,6 +967,13 @@ module Api
           }, status: :not_found
           return false
         end
+      end
+
+      def invalidate_home_feed_cache(school_id)
+        return unless defined?($redis) && $redis && school_id.present?
+
+        $redis.keys("school:#{school_id}:user:*:home").each { |k| $redis.del(k) }
+        $redis.keys("school:#{school_id}:trending:*").each { |k| $redis.del(k) }
       end
 
       def update_item_attributes

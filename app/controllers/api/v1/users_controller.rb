@@ -3,7 +3,8 @@ require 'redis'
 
 class Api::V1::UsersController < ApplicationController
   before_action :authenticate_user, except: [:sign_in, :refresh_token, :sign_up, :reactivate, :firebase_auth, :update_firebase_token]
-  skip_before_action :verify_authenticity_token, only: [:sign_in, :refresh_token, :sign_up, :reactivate, :update_mobile, :firebase_auth, :update_firebase_token]
+  skip_before_action :verify_authenticity_token, only: [:sign_in, :refresh_token, :sign_up, :reactivate, :update_mobile, :firebase_auth, :update_firebase_token, raise: false]
+  protect_from_forgery with: :null_session
 
   # ==================== AUTHENTICATION METHODS ====================
 
@@ -500,8 +501,29 @@ class Api::V1::UsersController < ApplicationController
     user_chat_rooms = @current_user.chat_rooms
     render json: { chat_rooms: user_chat_rooms.as_json(except: [:created_at, :updated_at]) }, status: :ok
   end
+  
+ def update_fcm_token
+  token = params[:fcm_token] || params.dig(:user, :fcm_token) || params[:token]
 
-  # ==================== ACCOUNT MANAGEMENT ====================
+  if token.blank?
+    return render json: { error: "fcm_token is required" }, status: :unprocessable_entity
+  end
+
+  user = @current_user
+
+  unless user
+    return render json: { error: "Unauthorized" }, status: :unauthorized
+  end
+
+  if user.update(fcm_token: token)
+    Rails.logger.info "✅ FCM token updated for user #{user.id}"
+    render json: { success: true, message: "FCM token updated" }
+  else
+    Rails.logger.error "FCM TOKEN UPDATE FAILED: #{user.errors.full_messages} | params: #{params.to_unsafe_h}"
+    render json: { error: user.errors.full_messages }, status: :unprocessable_entity
+  end
+end
+    # ==================== ACCOUNT MANAGEMENT ====================
 
   # POST /api/v1/users/disable
   def disable
